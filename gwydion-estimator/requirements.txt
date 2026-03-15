@@ -1,4 +1,5 @@
-kubernetes==25.3.0
+# TODO: pin library versions
+kubernetes>=29.0.0
 scikit-learn
 scipy
 matplotlib
