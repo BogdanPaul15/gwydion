@@ -73,7 +73,7 @@ def get_env(use_case, k8s, goal):
         # otherwise just comment the following lines
 
         env.reset()
-        _, _, _, info = env.step([0, 0])
+        _, _, _, _, info = env.step([0, 0])
         info_keywords = tuple(info.keys())
         env = SubprocVecEnv([lambda: Redis(k8s=k8s, goal_reward=goal) for i in range(8)])
         envs = VecMonitor(env, filename="vec_redis_gym_results_", info_keywords=info_keywords)
@@ -84,7 +84,7 @@ def get_env(use_case, k8s, goal):
         # otherwise just comment the following lines
 
         env.reset()
-        _, _, _, info = env.step([0, 0])
+        _, _, _, _, info = env.step([0, 0])
         info_keywords = tuple(info.keys())
         env = SubprocVecEnv([lambda: OnlineBoutique(k8s=k8s, goal_reward=goal) for i in range(8)])
         envs = VecMonitor(env, filename="vec_onlineboutique_gym_results_", info_keywords=info_keywords)
@@ -140,7 +140,7 @@ def main():
 
     if testing:
         model = get_load_model(alg, tensorboard_log, test_path)
-        test_model(model, env, n_episodes=100, n_steps=110, smoothing_window=5, fig_name=name + "_check2.png")
+        test_model(model, env, n_episodes=25, n_steps=25, smoothing_window=5, fig_name=name + "_check2.png")
 
 
 if __name__ == "__main__":
