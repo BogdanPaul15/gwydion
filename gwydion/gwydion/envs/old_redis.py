@@ -1,16 +1,18 @@
-from statistics import mean
-import time
 import csv
 import datetime
+import logging
+import time
+from statistics import mean
 
+import gymnasium as gym
+import numpy as np
+import pandas as pd
+from gymnasium import spaces
+from gymnasium.utils import seeding
 from datetime import datetime
 
-import numpy as np
-from gymnasium import spaces
-
-from gwydion.envs import base
-from gwydion.envs.deployment import get_redis_deployment_list
-from gwydion.envs.util import get_cost_reward, get_latency_reward_redis, save_to_csv, get_num_pods
+from gwydion.envs.deployment import get_max_cpu, get_max_mem, get_max_traffic, get_redis_deployment_list
+from gwydion.envs.util import save_to_csv, get_cost_reward, get_latency_reward_redis, get_num_pods
 
 # MIN and MAX Replication
 MIN_REPLICATION = 1
@@ -55,35 +57,106 @@ ID_SLAVE = 1
 LATENCY = 'latency'
 COST = 'cost'
 
-class Redis(base.BaseEnv):
-    """Horizontal Scaling for Redis in K8s - an Gymansium gym environment."""
-    def __init__(self, k8s=False, goal_reward=base.COST, waiting_period=5):
-        super().__init__(
-            name="redis_gym",
-            num_apps=2,
-            deployments=["redis-leader", "redis-follower"],
-            k8s=k8s,
-            goal_reward=goal_reward,
-            waiting_period=waiting_period
-        )
 
+class OldRedis(gym.Env):
+    """Horizontal Scaling for Redis in Kubernetes - an OpenAI gym environment"""
+    metadata = {'render.modes': ['human', 'ansi', 'array']}
+
+    def __init__(self, k8s=False, goal_reward=COST, waiting_period=5):
+        # Define action and observation space
+        # They must be gym.spaces objects
+
+        super(OldRedis, self).__init__()
+
+        self.k8s = k8s
+        self.name = "redis_gym"
+        self.__version__ = "0.0.1"
+        self.seed()
+        self.goal_reward = goal_reward
+        self.waiting_period = waiting_period  # seconds to wait after action
+
+        logging.info("[Init] Env: {} | K8s: {} | Version {} |".format(self.name, self.k8s, self.__version__))
+
+        # Current Step
+        self.current_step = 0
+
+        # Actions identified by integers 0-n -> 15 actions!
+        self.num_actions = 15
+
+        # Multi-Discrete version
+        # Deployment: Discrete 2 - Master[0], Slave[1]
+        # Action: Discrete 9 - None[0], Add-1[1], Add-2[2], Add-3[3], Add-4[4],
+        #                      Stop-1[5], Stop-2[6], Stop-3[7], Stop-4[8]
+
+        self.action_space = spaces.MultiDiscrete([2, self.num_actions])
+
+        # Observations: 22 Metrics! -> 2 * 11 = 22
+        # "number_pods"                     -> Number of deployed Pods
+        # "cpu_usage_aggregated"            -> via metrics-server
+        # "mem_usage_aggregated"            -> via metrics-server
+        # "cpu_requests"                    -> via metrics-server/pod
+        # "mem_requests"                    -> via metrics-server/pod
+        # "cpu_limits"                      -> via metrics-server
+        # "mem_limits"                      -> via metrics-server
+        # "lstm_cpu_prediction_1_step"      -> via pod annotation
+        # "lstm_cpu_prediction_5_step"      -> via pod annotation
+        # "average_number of requests"      -> Prometheus metric: sum(rate(http_server_requests_seconds_count[5m]))
+
+        self.min_pods = MIN_REPLICATION
+        self.max_pods = MAX_REPLICATION
+        self.num_apps = 2
+
+        # Deployment Data
         self.deploymentList = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         self.observation_space = self.get_observation_space()
 
-        # TODO remove this
+        # Action and Observation Space
+        logging.info("[Init] Action Spaces: " + str(self.action_space))
+        logging.info("[Init] Observation Spaces: " + str(self.observation_space))
+
+        # Info
+        self.total_reward = None
+        self.avg_pods = []
+        self.avg_latency = []
+
+        # episode over
+        self.terminated = False
+        self.episode_over = False
+        self.info = {}
+
+        # Keywords for Reward calculation
+        self.constraint_max_pod_replicas = False
+        self.constraint_min_pod_replicas = False
+        self.cost_weight = 0  # add here a value to consider cost in the reward function
+
+        self.time_start = 0
+        self.execution_time = 0
+        self.episode_count = 0
         self.file_results = "results.csv"
+        self.obs_csv = self.name + "_observation.csv"
+        self.df = pd.read_csv("datasets/real/" + self.deploymentList[0].namespace + "/v1/"
+                              + self.name + '_' + 'observation.csv')
 
-        if not k8s:
-            self.load_dataset()
-            self.traffic = self.simulation_traffic("redis-leader")
+        self.none_counter = 0
+        self.action_stats = [0 for _ in range(self.num_actions)]
+        self.traffic = self.simulation_traffic()
 
-    def reset(self, *, seed=None, options=None):
-        super().reset(seed=seed, options=options)
+    def normalize(self, obs):
+        return obs / self.observation_space.high
 
-        self.deploymentList = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
+    def simulation_traffic(self):
+        self.traffic = self.df['redis-leader_traffic_in'].tolist()
+        unique_traffic = []
+        seen = set()
 
-        return self.get_state(), self.info
+        for value in self.traffic:
+            if value not in seen:
+                unique_traffic.append(value)
+                seen.add(value)
+
+        # print(unique_traffic)
+        return unique_traffic
 
     def step(self, action):
         if self.current_step == 1:
@@ -92,11 +165,13 @@ class Redis(base.BaseEnv):
 
             self.time_start = time.time()
 
+        # Get first action: deployment
         if action[ID_DEPLOYMENTS] == 0:  # master
             n = ID_MASTER  # master
         else:
             n = ID_SLAVE  # slave
 
+        # Execute one time step within the environment
         self.take_action(action[ID_MOVES], n)
 
         # Wait a few seconds if on real k8s cluster
@@ -139,13 +214,13 @@ class Redis(base.BaseEnv):
 
         # Print Step and Total Reward
         # if self.current_step == MAX_STEPS:
-        # logging.info('[Step {}] | Action (Deployment): {} | Action (Move): {} | Reward: {} | Total Reward: {}'.format(
-        #     self.current_step, DEPLOYMENTS[action[0]], MOVES[action[1]], reward, self.total_reward))
+        logging.info('[Step {}] | Action (Deployment): {} | Action (Move): {} | Reward: {} | Total Reward: {}'.format(
+            self.current_step, DEPLOYMENTS[action[0]], MOVES[action[1]], reward, self.total_reward))
 
         ob = self.get_state()
         # print(ob)
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deploymentList[0].latency)
+        # self.save_obs_to_csv(self.obs_csv, np.array(ob), date, self.deploymentList[0].latency)
 
         #self.info = dict(
         #    total_reward=self.total_reward,
@@ -163,7 +238,37 @@ class Redis(base.BaseEnv):
 
         # return ob, reward, self.terminated, self.episode_over, self.info
         return np.array(ob), reward, self.terminated, self.episode_over, self.info
-    
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
+    def reset(self, seed = None, options = None):
+        """
+        Reset the state of the environment and returns an initial observation.
+        Returns
+        -------
+        observation (object): the initial observation of the space.
+        """
+        self.current_step = 0
+        self.terminated = False
+        self.episode_over = False
+        self.total_reward = 0
+        self.avg_pods = []
+        self.avg_latency = []
+
+        self.constraint_max_pod_replicas = False
+        self.constraint_min_pod_replicas = False
+
+        # Deployment Data
+        self.deploymentList = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
+
+        return np.array(self.get_state()), self.info
+
+    def render(self, mode='human', close=False):
+        # Render the environment to the screen
+        return
+
     def take_action(self, action, id):
         self.current_step += 1
 
@@ -238,8 +343,118 @@ class Redis(base.BaseEnv):
             self.deploymentList[id].terminate_pod_replicas(7, self)
 
         else:
-            # logging.info('[Take Action] Unrecognized Action: ' + str(action))
-            print()
+            logging.info('[Take Action] Unrecognized Action: ' + str(action))
+
+    @property
+    def get_reward(self):
+        """ Calculate Rewards """
+        '''
+        ob = self.get_state()
+        logging.info('[Reward] | Master Pods: {} | CPU Usage: {} | MEM Usage: {} | Requests: {} | Response Time: {} | '
+                     'Slave Pods: {} | CPU Usage: {} | MEM Usage: {} | Requests: {} | Response Time: {} |'.format(
+            ob.__getitem__(0), ob.__getitem__(1), ob.__getitem__(2), ob.__getitem__(9), ob.__getitem__(10),
+            ob.__getitem__(11), ob.__getitem__(12), ob.__getitem__(13), ob.__getitem__(20), ob.__getitem__(21), ))
+        '''
+        # Reward based on Keyword!
+        if self.constraint_max_pod_replicas:
+            if self.goal_reward == COST:
+                return -1  # penalty
+            elif self.goal_reward == LATENCY:
+                return -250  # penalty
+
+        if self.constraint_min_pod_replicas:
+            if self.goal_reward == COST:
+                return -1  # penalty
+            elif self.goal_reward == LATENCY:
+                return -250  # penalty
+
+        # Reward Calculation
+        reward = self.calculate_reward()
+        # logging.info('[Get Reward] Reward: {} | Ob: {} |'.format(reward, ob))
+        # logging.info('[Get Reward] Acc. Reward: {} |'.format(self.total_reward))
+
+        return reward
+
+    def get_state(self):
+        # Observations: metrics - 3 Metrics!!
+        # "number_pods"
+        # "cpu"
+        # "mem"
+        # "requests"
+
+        # Return ob
+        ob = (
+            self.deploymentList[0].num_pods,
+            # self.deploymentList[0].desired_replicas,
+            self.deploymentList[0].cpu_usage,
+            self.deploymentList[0].mem_usage,
+            self.deploymentList[0].cpu_forecast,
+            self.deploymentList[0].mem_forecast,
+            # self.deploymentList[0].received_traffic,
+            # self.deploymentList[0].transmit_traffic,
+            self.deploymentList[1].num_pods,
+            # self.deploymentList[1].desired_replicas,
+            self.deploymentList[1].cpu_usage,
+            self.deploymentList[1].mem_usage,
+            self.deploymentList[1].cpu_forecast,
+            self.deploymentList[1].mem_forecast,
+            self.none_counter,
+            # self.deploymentList[1].received_traffic,
+            # self.deploymentList[1].transmit_traffic,
+        )
+        # return ob
+        return self.normalize(ob)
+
+    def get_observation_space(self):
+        return spaces.Box(
+            low=np.array([
+                self.min_pods,  # Number of Pods  -- master metrics
+                # self.min_pods,  # Desired Replicas
+                0,  # CPU Usage (in m)
+                0,  # MEM Usage (in MiB)
+                0,  # CPU forecast
+                0,  # Memory forecast
+                self.min_pods,  # Number of Pods -- slave metrics
+                # self.min_pods,  # Number of Pods -- slave metrics
+                0,  # CPU Usage (in m)
+                0,  # MEM Usage (in MiB)
+                0,  # CPU forecast
+                0,  # Memory forecast
+                0,  # Num of Nones used
+                # 0,  # Average Number of received traffic
+                # 0,  # Average Number of transmit traffic
+            ]), high=np.array([
+                self.max_pods,      # Number of Pods -- master metrics
+                # self.max_pods,    # Desired Replicas
+                1000,   # CPU Usage (in m)
+                1000,   # MEM Usage (in MiB)
+                get_max_cpu(),  # CPU forecast
+                get_max_cpu(),  # Memory forecast
+                self.max_pods,  # Number of Pods -- slave metrics
+                # self.max_pods,  # Desired Replicas
+                1000,   # CPU Usage (in m)
+                1000,   # MEM Usage (in MiB)
+                get_max_cpu(),  # CPU forecast
+                get_max_cpu(),  # Memory forecast
+                10,     # Num of Nones used
+                # get_max_traffic(),  # Average Number of received traffic
+                # get_max_traffic(),  # Average Number of transmit traffic
+            ]),
+            dtype=np.float32
+        )
+
+    # calculates the reward based on the objective
+    def calculate_reward(self):
+        reward = 0
+        if self.goal_reward == COST:
+            reward = get_cost_reward(self.deploymentList)
+            if reward != 2 and self.none_counter > 2:
+                reward = -self.none_counter
+        elif self.goal_reward == LATENCY:
+            reward = get_latency_reward_redis(ID_MASTER, self.deploymentList)
+            if self.none_counter > 2:
+                reward = -self.none_counter * 250  # highest penalty over 250 ms
+        return reward
 
     def simulation_update(self, action):
         if self.current_step == 1:
@@ -328,82 +543,6 @@ class Redis(base.BaseEnv):
             d.update_replicas()
         return
 
-    def calculate_reward(self):
-        reward = 0
-        if self.goal_reward == base.COST:
-            reward = get_cost_reward(self.deploymentList)
-            if reward !=2 and self.none_counter > 2:
-                reward = -self.none_counter
-        elif self.goal_reward == base.LATENCY:
-            reward = get_latency_reward_redis(ID_MASTER, self.deploymentList)
-            if self.none_counter > 2:
-                reward = -self.none_counter * 250
-
-        return reward
-
-    @property
-    def get_reward(self):
-        if self.constraint_min_pod_replicas:
-            if self.goal_reward == base.COST:
-                return -1
-            elif self.goal_reward == base.LATENCY:
-                return -250
-        
-        if self.constraint_max_pod_replicas:
-            if self.goal_reward == base.COST:
-                return -1
-            elif self.goal_reward == base.LATENCY:
-                return -250
-
-        reward = self.calculate_reward()
-
-        return reward
-
-    def get_observation_space(self):
-        return spaces.Box(
-            low=np.array([
-                self.min_pods, # Number of pods -- leader
-                0, # CPU Usage (in m)
-                0, # MEM Usage (in MiB)
-                0, # CPU forecast (in m)
-                0, # MEM forecast (in MiB)
-                self.min_pods, # Number of pods -- follower
-                0, # CPU Usage (in m)
-                0, # MEM Usage (in MiB)
-                0, # CPU forecast (in m)
-                0, # MEM forecast (in MiB)
-            ]),
-            high=np.array([
-                self.max_pods, # Number of pods -- leader
-                1000, # CPU Usage (in m)
-                1000, # MEM Usage (in MiB)
-                1000, # CPU forecast (in m)
-                1000, # MEM forecast (in MiB)
-                self.max_pods, # Number of pods -- follower
-                1000, # CPU Usage (in m)
-                1000, # MEM Usage (in MiB)
-                1000, # CPU forecast (in m)
-                1000, # MEM forecast (in MiB)
-            ]),
-            dtype=np.float32
-        )
-
-    def get_state(self):
-        ob = (
-            self.deploymentList[0].num_pods, # Number of pods -- leader
-            self.deploymentList[0].cpu_usage, #  CPU Usage (in m)
-            self.deploymentList[0].mem_usage, # MEM Usage (in MiB)
-            self.deploymentList[0].cpu_forecast, # CPU forecast (in m)
-            self.deploymentList[0].mem_forecast, # MEM forecast (in MiB)
-            self.deploymentList[0].num_pods, # Number of pods -- follower
-            self.deploymentList[0].cpu_usage, #  CPU Usage (in m)
-            self.deploymentList[0].mem_usage, # MEM Usage (in MiB)
-            self.deploymentList[0].cpu_forecast, # CPU forecast (in m)
-            self.deploymentList[0].mem_forecast, # MEM forecast (in MiB)
-        )
-
-        return self.normalize(ob)
-
     def save_obs_to_csv(self, obs_file, obs, date, latency):
         file = open(obs_file, 'a+', newline='')  # append
         # file = open(file_name, 'w', newline='') # new
@@ -412,11 +551,11 @@ class Redis(base.BaseEnv):
             fields.append('date')
             for d in self.deploymentList:
                 fields.append(d.name + '_num_pods')
-                # fields.append(d.name + '_desired_replicas')
+                fields.append(d.name + '_desired_replicas')
                 fields.append(d.name + '_cpu_usage')
                 fields.append(d.name + '_mem_usage')
-                # fields.append(d.name + '_traffic_in')
-                # fields.append(d.name + '_traffic_out')
+                fields.append(d.name + '_traffic_in')
+                fields.append(d.name + '_traffic_out')
                 fields.append(d.name + '_latency')
 
             '''
@@ -433,18 +572,18 @@ class Redis(base.BaseEnv):
             writer.writerow(
                 {'date': date,
                  'redis-leader_num_pods': float("{}".format(obs[0])),
-                #  'redis-leader_desired_replicas': int("{}".format(obs[1])),
-                 'redis-leader_cpu_usage': float("{}".format(obs[1])),
-                 'redis-leader_mem_usage': float("{}".format(obs[2])),
-                #  'redis-leader_traffic_in': int("{}".format(obs[4])),
-                #  'redis-leader_traffic_out': int("{}".format(obs[5])),
+                 'redis-leader_desired_replicas': int("{}".format(obs[1])),
+                 'redis-leader_cpu_usage': float("{}".format(obs[2])),
+                 'redis-leader_mem_usage': float("{}".format(obs[3])),
+                 'redis-leader_traffic_in': int("{}".format(obs[4])),
+                 'redis-leader_traffic_out': int("{}".format(obs[5])),
                  'redis-leader_latency': float("{:.3f}".format(latency)),
-                 'redis-follower_num_pods': float("{}".format(obs[3])),
-                #  'redis-follower_desired_replicas': int("{}".format(obs[7])),
-                 'redis-follower_cpu_usage': float("{}".format(obs[4])),
-                 'redis-follower_mem_usage': float("{}".format(obs[5])),
-                #  'redis-follower_traffic_in': int("{}".format(obs[10])),
-                #  'redis-follower_traffic_out': int("{}".format(obs[11])),
+                 'redis-follower_num_pods': float("{}".format(obs[6])),
+                 'redis-follower_desired_replicas': int("{}".format(obs[7])),
+                 'redis-follower_cpu_usage': float("{}".format(obs[8])),
+                 'redis-follower_mem_usage': float("{}".format(obs[9])),
+                 'redis-follower_traffic_in': int("{}".format(obs[10])),
+                 'redis-follower_traffic_out': int("{}".format(obs[11])),
                  'redis-follower_latency': float("{:.3f}".format(latency))
                  }
             )

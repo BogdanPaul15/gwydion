@@ -130,7 +130,7 @@ class BaseEnv(gym.Env):
                 # logging.info(f"[Base] Dataset loaded from {path}")
             except FileNotFoundError:
                 # logging.error(f"[Base] Could not find dataset at {path}")
-                print()
+                print("ERROR")
 
     def normalize(self, obs):
         """Normalizes the observation vector using the high bounds of the space.
