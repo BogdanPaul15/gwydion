@@ -1,10 +1,16 @@
 from typing import List, Optional
 
+from datetime import datetime
+from statistics import mean
 import numpy as np
 import pandas as pd
+import time
+import csv
 
 import gymnasium as gym
 from gymnasium import spaces
+
+from gwydion.envs.util import get_num_pods, save_to_csv
 
 MIN_REPLICATION = 1
 MAX_REPLICATION = 8
@@ -13,6 +19,26 @@ ACTION_MOVES_COUNT = 15
 
 COST = "cost"
 LATENCY = "latency"
+
+ID_DEPLOYMENTS = 0
+ID_MOVES = 1
+
+ACTION_DO_NOTHING = 0
+ACTION_ADD_1_REPLICA = 1
+ACTION_ADD_2_REPLICA = 2
+ACTION_ADD_3_REPLICA = 3
+ACTION_ADD_4_REPLICA = 4
+ACTION_ADD_5_REPLICA = 5
+ACTION_ADD_6_REPLICA = 6
+ACTION_ADD_7_REPLICA = 7
+ACTION_TERMINATE_1_REPLICA = 8
+ACTION_TERMINATE_2_REPLICA = 9
+ACTION_TERMINATE_3_REPLICA = 10
+ACTION_TERMINATE_4_REPLICA = 11
+ACTION_TERMINATE_5_REPLICA = 12
+ACTION_TERMINATE_6_REPLICA = 13
+ACTION_TERMINATE_7_REPLICA = 14
+
 
 class BaseEnv(gym.Env):
     """Abstract Base Class for Kubernetes Horizontal Scaling Environments.
@@ -113,6 +139,10 @@ class BaseEnv(gym.Env):
         self.action_space = spaces.MultiDiscrete([num_apps, self.num_actions])
         self.observation_space = None
 
+        # TODO: MODIFY THIS
+        self.latency_penalty = 250
+        # self.obs_file = f"{self.name}_observations.csv"
+
         self.df = None
 
     def load_dataset(self):
@@ -200,6 +230,10 @@ class BaseEnv(gym.Env):
         self.avg_latency = []
 
         # TODO should also reset self.action_stats, self.time_start, self.execution_time, self.info
+        self.time_start = 0
+        self.execution_time = 0
+        self.info = {}
+        self.action_stats = [0 for _ in range(self.num_actions)]
 
         # Note: self.deploymentList should be reinitialized in the child
         # after calling super().reset()
@@ -217,22 +251,159 @@ class BaseEnv(gym.Env):
         return
 
     def step(self, action):
-        raise NotImplementedError
+        app_id, move_id = action
+
+        if self.current_step == 1:
+            if not self.k8s:
+                self.simulation_update()
+
+            self.time_start = time.time()
+
+        self.take_action(move_id, app_id)
+
+        if self.k8s:
+            if action[ID_MOVES] != ACTION_DO_NOTHING and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
+                time.sleep(self.waiting_period)
+
+            for d in self.deploymentList:
+                d.update_k8s_obs()
+        else:
+            self.simulation_update()
+
+        reward = self.get_reward
+
+        self.total_reward += reward
+        self.avg_pods.append(get_num_pods(self.deploymentList))
+        self.avg_latency.append(self.deploymentList[0].latency)
+
+        self.info = {
+            "reward": f"{self.total_reward:.2f}",
+            'avg_pods': f"{mean(self.avg_pods):.3f}",
+            'avg_latency': f"{mean(self.avg_latency):.3f}",
+            'executionTime': f"{self.execution_time:.3f}"
+        }
+
+        ob = self.get_state()
+        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # TODO should be called before normalizing the observations
+        self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deploymentList[0].latency)
+
+        self.constraint_min_pod_replicas = False
+        self.constraint_max_pod_replicas = False
+
+        if self.current_step == MAX_STEPS:
+            self.episode_count += 1
+            self.execution_time = time.time() - self.time_start
+            save_to_csv(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),
+                        self.total_reward, self.execution_time)
+
+        return np.array(ob), reward, self.terminated, self.episode_over, self.info
+
+    # TODO: this simulation mode does work only for online_boutique simulation strategy
+    # redis environment has a different strategy
+    # Note: There is a situation when it tries to scale beyond its limits, and the system ends up
+    # getting a random sample, instead of looking for a situation with the same number of pods,
+    def simulation_update(self):
+        if self.current_step == 1:
+            sample = self.df.sample()
+
+            for i, name in enumerate(self.deployments_names):
+                self.deploymentList[i].num_pods = int(sample[f"{name}_num_pods"].values[0])
+                self.deploymentList[i].num_previous_pods = int(sample[f"{name}_num_pods"].values[0])
+
+        else:
+            pods = []
+            previous_pods = []
+            diff = []
+            data = self.df
+
+            for i, name in enumerate(self.deployments_names):
+                pods.append(self.deploymentList[i].num_pods)
+                previous_pods.append(self.deploymentList[i].num_previous_pods)
+                aux = pods[i] - previous_pods[i]
+                diff.append(aux)
+                self.df[f"diff-{name}"] = self.df[f"{name}_num_pods"].diff()
+
+            for i in range(self.num_apps):
+                data = data.loc[self.df[f"{self.deployments_names[i]}_num_pods"] == pods[i]]
+                data = data.loc[data[f"diff-{self.deployments_names[i]}"] == diff[i]]
+
+                new_traffic = self.traffic.pop(0)
+
+                if data.size == 0:
+                    data = data.loc[self.df[f"{self.deployments_names[i]}_num_pods"] == pods[i]]
+
+                self.traffic.append(new_traffic)
+
+                if data.size == 0:
+                    data = self.df.loc[self.df[f"{self.deployments_names[i]}_num_pods"] == pods[i]]
+
+            sample = data.sample()
+
+        for i, name in enumerate(self.deployments_names):
+            self.deploymentList[i].cpu_usage = int(sample[f"{name}_cpu_usage"].values[0])
+            self.deploymentList[i].mem_usage = int(sample[f"{name}_mem_usage"].values[0])
+            self.deploymentList[i].received_traffic = int(sample[f"{name}_traffic_in"].values[0])
+            self.deploymentList[i].transmit_traffic = int(sample[f"{name}_traffic_out"].values[0])
+            self.deploymentList[i].latency = float(f"{sample[f'{name}_latency'].values[0]:.3f}")
+
+        for d in self.deploymentList:
+            d.update_replicas()
+
+        return
 
     def take_action(self, action, id):
-        raise NotImplementedError
-
-    def simulation_update(self, action):
         raise NotImplementedError
 
     def calculate_reward(self):
         raise NotImplementedError
 
+    @property
     def get_reward(self):
-        raise NotImplementedError
+        if self.constraint_min_pod_replicas:
+            if self.goal_reward == COST:
+                return -1
+            elif self.goal_reward == LATENCY:
+                return -self.latency_penalty
+
+        if self.constraint_max_pod_replicas:
+            if self.goal_reward == COST:
+                return -1
+            elif self.goal_reward == LATENCY:
+                return -self.latency_penalty
+
+        reward = self.calculate_reward()
+        return reward
 
     def get_state(self):
         raise NotImplementedError
 
     def get_observation_space(self):
         raise NotImplementedError
+
+    def save_obs_to_csv(self, obs_file, obs, date, latency):
+        file = open(obs_file, 'a+', encoding='utf-8', newline='')
+        fields = []
+        with file:
+            fields.append('date')
+            for d in self.deploymentList:
+                fields.append(d.name + '_num_pods')
+                fields.append(d.name + '_cpu_usage')
+                fields.append(d.name + '_mem_usage')
+                fields.append(d.name + '_latency')
+
+            writer = csv.DictWriter(file, fieldnames=fields)
+            writer.writeheader()
+            writer.writerow(
+                {'date': date,
+                 'redis-leader_num_pods': int(f"{obs[0]}"),
+                 'redis-leader_cpu_usage': float(f"{obs[1]}"),
+                 'redis-leader_mem_usage': float(f"{obs[2]}"),
+                 'redis-leader_latency': float(f"{latency:.3f}"),
+                 'redis-follower_num_pods': float(f"{obs[3]}"),
+                 'redis-follower_cpu_usage': float(f"{obs[4]}"),
+                 'redis-follower_mem_usage': float(f"{obs[5]}"),
+                 'redis-follower_latency': float(f"{latency:.3f}")
+                 }
+            )
+        return

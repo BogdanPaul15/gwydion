@@ -84,85 +84,6 @@ class Redis(base.BaseEnv):
         self.deploymentList = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         return self.get_state(), self.info
-
-    def step(self, action):
-        if self.current_step == 1:
-            if not self.k8s:
-                self.simulation_update(action)
-
-            self.time_start = time.time()
-
-        if action[ID_DEPLOYMENTS] == 0:  # master
-            n = ID_MASTER  # master
-        else:
-            n = ID_SLAVE  # slave
-
-        self.take_action(action[ID_MOVES], n)
-
-        # Wait a few seconds if on real k8s cluster
-        if self.k8s:
-            if action[ID_MOVES] != ACTION_DO_NOTHING \
-                    and self.constraint_min_pod_replicas is False \
-                    and self.constraint_max_pod_replicas is False:
-                # logging.info('[Step {}] | Waiting {} seconds for enabling action ...'
-                # .format(self.current_step, self.waiting_period))
-                time.sleep(self.waiting_period)  # Wait a few seconds...
-
-        # Update observation before reward calculation:
-        if self.k8s:  # k8s cluster
-            for d in self.deploymentList:
-                d.update_obs_k8s()
-        else:  # simulation
-            self.simulation_update(action)
-
-        # Get reward
-        reward = self.get_reward
-
-        ###
-        if action[ID_MOVES] == ACTION_DO_NOTHING and reward == 0:
-            reward = -1
-        ###
-
-        # Update Infos
-        self.total_reward += reward
-        self.avg_pods.append(get_num_pods(self.deploymentList))
-        self.avg_latency.append(self.deploymentList[0].latency)
-
-        self.info = {
-            #"reward_step": float("{:.2f}".format(reward)),
-            # "action": float("{:.2f}".format(action)),
-            "reward": float("{:.2f}".format(self.total_reward)),
-            'avg_pods': float("{:.3f}".format(mean(self.avg_pods))),
-            'avg_latency': float("{:.3f}".format(mean(self.avg_latency))),
-            'executionTime': float("{:.3f}".format(self.execution_time))
-        }
-
-        # Print Step and Total Reward
-        # if self.current_step == MAX_STEPS:
-        # logging.info('[Step {}] | Action (Deployment): {} | Action (Move): {} | Reward: {} | Total Reward: {}'.format(
-        #     self.current_step, DEPLOYMENTS[action[0]], MOVES[action[1]], reward, self.total_reward))
-
-        ob = self.get_state()
-        # print(ob)
-        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deploymentList[0].latency)
-
-        #self.info = dict(
-        #    total_reward=self.total_reward,
-        #)
-
-        # Update Reward Keywords
-        self.constraint_max_pod_replicas = False
-        self.constraint_min_pod_replicas = False
-
-        if self.current_step == MAX_STEPS:
-            self.episode_count += 1
-            self.execution_time = time.time() - self.time_start
-            save_to_csv(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),
-                        self.total_reward, self.execution_time)
-
-        # return ob, reward, self.terminated, self.episode_over, self.info
-        return np.array(ob), reward, self.terminated, self.episode_over, self.info
     
     def take_action(self, action, id):
         self.current_step += 1
@@ -178,155 +99,67 @@ class Redis(base.BaseEnv):
         # ACTIONS
         if action == ACTION_DO_NOTHING:
             self.none_counter += 1
-            # logging.info("[Take Action] SELECTED ACTION: DO NOTHING ...")
+            print("[Take Action] SELECTED ACTION: DO NOTHING ...")
             pass
 
         elif action == ACTION_ADD_1_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
+            print("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
             self.deploymentList[id].deploy_pod_replicas(1, self)
 
         elif action == ACTION_ADD_2_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: ADD 2 Replicas ...")
+            print("[Take Action] SELECTED ACTION: ADD 2 Replicas ...")
             self.deploymentList[id].deploy_pod_replicas(2, self)
 
         elif action == ACTION_ADD_3_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: ADD 3 Replicas ...")
+            print("[Take Action] SELECTED ACTION: ADD 3 Replicas ...")
             self.deploymentList[id].deploy_pod_replicas(3, self)
 
         elif action == ACTION_ADD_4_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: ADD 4 Replicas ...")
+            print("[Take Action] SELECTED ACTION: ADD 4 Replicas ...")
             self.deploymentList[id].deploy_pod_replicas(4, self)
 
         elif action == ACTION_ADD_5_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: ADD 5 Replicas ...")
+            print("[Take Action] SELECTED ACTION: ADD 5 Replicas ...")
             self.deploymentList[id].deploy_pod_replicas(5, self)
 
         elif action == ACTION_ADD_6_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: ADD 6 Replicas ...")
+            print("[Take Action] SELECTED ACTION: ADD 6 Replicas ...")
             self.deploymentList[id].deploy_pod_replicas(6, self)
 
         elif action == ACTION_ADD_7_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: ADD 7 Replicas ...")
+            print("[Take Action] SELECTED ACTION: ADD 7 Replicas ...")
             self.deploymentList[id].deploy_pod_replicas(7, self)
 
         elif action == ACTION_TERMINATE_1_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: TERMINATE 1 Replica ...")
+            print("[Take Action] SELECTED ACTION: TERMINATE 1 Replica ...")
             self.deploymentList[id].terminate_pod_replicas(1, self)
 
         elif action == ACTION_TERMINATE_2_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: TERMINATE 2 Replicas ...")
+            print("[Take Action] SELECTED ACTION: TERMINATE 2 Replicas ...")
             self.deploymentList[id].terminate_pod_replicas(2, self)
 
         elif action == ACTION_TERMINATE_3_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: TERMINATE 3 Replicas ...")
+            print("[Take Action] SELECTED ACTION: TERMINATE 3 Replicas ...")
             self.deploymentList[id].terminate_pod_replicas(3, self)
 
         elif action == ACTION_TERMINATE_4_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: TERMINATE 4 Replicas ...")
+            print("[Take Action] SELECTED ACTION: TERMINATE 4 Replicas ...")
             self.deploymentList[id].terminate_pod_replicas(4, self)
 
         elif action == ACTION_TERMINATE_5_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: TERMINATE 5 Replicas ...")
+            print("[Take Action] SELECTED ACTION: TERMINATE 5 Replicas ...")
             self.deploymentList[id].terminate_pod_replicas(5, self)
 
         elif action == ACTION_TERMINATE_6_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: TERMINATE 6 Replicas ...")
+            print("[Take Action] SELECTED ACTION: TERMINATE 6 Replicas ...")
             self.deploymentList[id].terminate_pod_replicas(6, self)
 
         elif action == ACTION_TERMINATE_7_REPLICA:
-            # logging.info("[Take Action] SELECTED ACTION: TERMINATE 7 Replicas ...")
+            print("[Take Action] SELECTED ACTION: TERMINATE 7 Replicas ...")
             self.deploymentList[id].terminate_pod_replicas(7, self)
 
         else:
-            # logging.info('[Take Action] Unrecognized Action: ' + str(action))
-            print()
-
-    def simulation_update(self, action):
-        if self.current_step == 1:
-            # Get a random sample!
-            sample = self.df.sample()
-            # print(sample)
-
-            self.deploymentList[0].num_pods = int(sample['redis-leader_num_pods'].values[0])
-            self.deploymentList[0].num_previous_pods = int(sample['redis-leader_num_pods'].values[0])
-            self.deploymentList[1].num_pods = int(sample['redis-follower_num_pods'].values[0])
-            self.deploymentList[1].num_previous_pods = int(sample['redis-follower_num_pods'].values[0])
-
-        else:
-            ### New Simulation ###
-            action_num = action[ID_DEPLOYMENTS]
-            other_num = 1 - action[ID_DEPLOYMENTS]
-
-            action_pods = self.deploymentList[action_num].num_pods
-            action_previous_pods = self.deploymentList[action_num].num_previous_pods
-            other_pods = self.deploymentList[other_num].num_pods
-            other_previous_pods = self.deploymentList[other_num].num_previous_pods
-
-            diff_action = action_pods - action_previous_pods
-            diff_other = other_pods - other_previous_pods
-
-            action_deployment = DEPLOYMENTS[action_num]
-            other_deployment = DEPLOYMENTS[other_num]
-
-            self.df['diff-' + action_deployment] = self.df[action_deployment + '_num_pods'].diff()
-            self.df['diff-' + other_deployment] = self.df[other_deployment + '_num_pods'].diff()
-
-            data = self.df.loc[self.df[action_deployment + '_num_pods'] == action_pods]
-            next_data = data.loc[data[other_deployment + '_num_pods'] == other_pods]
-
-            # action_pods -> y, other_pods -> n
-            if next_data.size == 0:
-                next_data = data.loc[data['diff-' + action_deployment] == diff_action]
-
-                if next_data.size == 0:
-                    # print('# action_pods -> y, other_pods -> n, diff-action -> n, diff-other -> n')
-                    sample = data.sample()
-                else:
-                    # print('# action_pods -> y, other_pods -> n, diff-action -> y, diff-other -> n')
-                    sample = next_data.sample()
-
-            else:
-                # action_pods->y, other_pods->y
-                new_data = next_data.loc[next_data['diff-' + action_deployment] == diff_action]
-
-                if new_data.size == 0:
-                    # action_pods -> y, other_pods -> y, diff-action -> n
-                    next_data = next_data.loc[next_data['diff-' + other_deployment] == diff_other]
-
-                    if next_data.size == 0:
-                        # print('# action_pods -> y, other_pods -> y, diff-action -> n, diff-other -> n')
-                        sample = data.sample()
-                    else:
-                        # print('# action_pods -> y, other_pods -> y, diff-action -> n, diff-other -> y')
-                        sample = next_data.sample()
-                else:
-                    # action_pods -> y, other_pods -> y, diff-action -> y
-                    next_data = new_data.loc[new_data['diff-' + other_deployment] == diff_other]
-                    if next_data.size == 0:
-                        # print('# action_pods -> y, other_pods -> y, diff-action -> y, diff-other -> n')
-                        sample = new_data.sample()
-                    else:
-                        # print('# action_pods -> y, other_pods -> y, diff-action -> y, diff-other -> y')
-                        sample = next_data.sample()
-
-        # print(sample
-
-        self.deploymentList[0].cpu_usage = int(sample['redis-leader_cpu_usage'].values[0])
-        self.deploymentList[0].mem_usage = int(sample['redis-leader_mem_usage'].values[0])
-        self.deploymentList[0].received_traffic = int(sample['redis-leader_traffic_in'].values[0])
-        self.deploymentList[0].transmit_traffic = int(sample['redis-leader_traffic_out'].values[0])
-        self.deploymentList[0].latency = float(sample['redis-leader_latency'].values[0])
-
-        self.deploymentList[1].cpu_usage = int(sample['redis-follower_cpu_usage'].values[0])
-        self.deploymentList[1].mem_usage = int(sample['redis-follower_mem_usage'].values[0])
-        self.deploymentList[1].received_traffic = int(sample['redis-follower_traffic_in'].values[0])
-        self.deploymentList[1].transmit_traffic = int(sample['redis-follower_traffic_out'].values[0])
-        self.deploymentList[1].latency = float(sample['redis-follower_latency'].values[0])
-
-        for d in self.deploymentList:
-            # Update Desired replicas
-            d.update_replicas()
-        return
+            print('[Take Action] Unrecognized Action: ' + str(action))
 
     def calculate_reward(self):
         reward = 0
@@ -338,24 +171,6 @@ class Redis(base.BaseEnv):
             reward = get_latency_reward_redis(ID_MASTER, self.deploymentList)
             if self.none_counter > 2:
                 reward = -self.none_counter * 250
-
-        return reward
-
-    @property
-    def get_reward(self):
-        if self.constraint_min_pod_replicas:
-            if self.goal_reward == base.COST:
-                return -1
-            elif self.goal_reward == base.LATENCY:
-                return -250
-        
-        if self.constraint_max_pod_replicas:
-            if self.goal_reward == base.COST:
-                return -1
-            elif self.goal_reward == base.LATENCY:
-                return -250
-
-        reward = self.calculate_reward()
 
         return reward
 
@@ -402,50 +217,5 @@ class Redis(base.BaseEnv):
             self.deploymentList[0].mem_forecast, # MEM forecast (in MiB)
         )
 
-        return self.normalize(ob)
-
-    def save_obs_to_csv(self, obs_file, obs, date, latency):
-        file = open(obs_file, 'a+', newline='')  # append
-        # file = open(file_name, 'w', newline='') # new
-        fields = []
-        with file:
-            fields.append('date')
-            for d in self.deploymentList:
-                fields.append(d.name + '_num_pods')
-                # fields.append(d.name + '_desired_replicas')
-                fields.append(d.name + '_cpu_usage')
-                fields.append(d.name + '_mem_usage')
-                # fields.append(d.name + '_traffic_in')
-                # fields.append(d.name + '_traffic_out')
-                fields.append(d.name + '_latency')
-
-            '''
-            fields = ['date', 'redis-leader_num_pods', 'redis-leader_desired_replicas', 'redis-leader_cpu_usage', 'redis-leader_mem_usage',
-                      'redis-leader_cpu_request', 'redis-leader_mem_request', 'redis-leader_cpu_limit', 'redis-leader_mem_limit',
-                      'redis-leader_traffic_in', 'redis-leader_traffic_out',
-                      'redis-follower_num_pods', 'redis-follower_desired_replicas', 'redis-follower_cpu_usage',
-                      'redis-follower_mem_usage', 'redis-follower_cpu_request', 'redis-follower_mem_request', 'redis-follower_cpu_limit',
-                      'redis-follower_mem_limit', 'redis-follower_traffic_in', 'redis-follower_traffic_out']
-            '''
-            writer = csv.DictWriter(file, fieldnames=fields)
-            # writer.writeheader() # write header
-            # obs = obs*self.observation_space.high
-            writer.writerow(
-                {'date': date,
-                 'redis-leader_num_pods': float("{}".format(obs[0])),
-                #  'redis-leader_desired_replicas': int("{}".format(obs[1])),
-                 'redis-leader_cpu_usage': float("{}".format(obs[1])),
-                 'redis-leader_mem_usage': float("{}".format(obs[2])),
-                #  'redis-leader_traffic_in': int("{}".format(obs[4])),
-                #  'redis-leader_traffic_out': int("{}".format(obs[5])),
-                 'redis-leader_latency': float("{:.3f}".format(latency)),
-                 'redis-follower_num_pods': float("{}".format(obs[3])),
-                #  'redis-follower_desired_replicas': int("{}".format(obs[7])),
-                 'redis-follower_cpu_usage': float("{}".format(obs[4])),
-                 'redis-follower_mem_usage': float("{}".format(obs[5])),
-                #  'redis-follower_traffic_in': int("{}".format(obs[10])),
-                #  'redis-follower_traffic_out': int("{}".format(obs[11])),
-                 'redis-follower_latency': float("{:.3f}".format(latency))
-                 }
-            )
-        return
+        # return self.normalize(ob)
+        return ob
