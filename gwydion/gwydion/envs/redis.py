@@ -1,22 +1,11 @@
-from statistics import mean
-import time
 import csv
-import datetime
-
-from datetime import datetime
 
 import numpy as np
 from gymnasium import spaces
 
 from gwydion.envs import base
 from gwydion.envs.deployment import get_redis_deployment_list
-from gwydion.envs.util import get_cost_reward, get_latency_reward_redis, save_to_csv, get_num_pods
-
-# MIN and MAX Replication
-MIN_REPLICATION = 1
-MAX_REPLICATION = 8
-
-###STEP COUNTER###
+from gwydion.envs.util import get_cost_reward, get_latency_reward_redis
 
 MAX_STEPS = 25  # MAX Number of steps per episode
 
@@ -37,23 +26,7 @@ ACTION_TERMINATE_5_REPLICA = 12
 ACTION_TERMINATE_6_REPLICA = 13
 ACTION_TERMINATE_7_REPLICA = 14
 
-# Deployments
-DEPLOYMENTS = ["redis-leader", "redis-follower"]
-
-# Action Moves
-MOVES = ["None", "Add-1", "Add-2", "Add-3", "Add-4", "Add-5", "Add-6", "Add-7",
-         "Stop-1", "Stop-2", "Stop-3", "Stop-4", "Stop-5", "Stop-6", "Stop-7"]
-
-# IDs
-ID_DEPLOYMENTS = 0
-ID_MOVES = 1
-
 ID_MASTER = 0
-ID_SLAVE = 1
-
-# Reward objectives
-LATENCY = 'latency'
-COST = 'cost'
 
 class Redis(base.BaseEnv):
     """Horizontal Scaling for Redis in K8s - an Gymansium gym environment."""
@@ -210,12 +183,39 @@ class Redis(base.BaseEnv):
             self.deploymentList[0].mem_usage, # MEM Usage (in MiB)
             self.deploymentList[0].cpu_forecast, # CPU forecast (in m)
             self.deploymentList[0].mem_forecast, # MEM forecast (in MiB)
-            self.deploymentList[0].num_pods, # Number of pods -- follower
-            self.deploymentList[0].cpu_usage, #  CPU Usage (in m)
-            self.deploymentList[0].mem_usage, # MEM Usage (in MiB)
-            self.deploymentList[0].cpu_forecast, # CPU forecast (in m)
-            self.deploymentList[0].mem_forecast, # MEM forecast (in MiB)
+            self.deploymentList[1].num_pods, # Number of pods -- follower
+            self.deploymentList[1].cpu_usage, #  CPU Usage (in m)
+            self.deploymentList[1].mem_usage, # MEM Usage (in MiB)
+            self.deploymentList[1].cpu_forecast, # CPU forecast (in m)
+            self.deploymentList[1].mem_forecast, # MEM forecast (in MiB)
         )
 
         # return self.normalize(ob)
         return ob
+
+    def save_obs_to_csv(self, obs_file, obs, date, latency):
+        file = open(obs_file, 'a+', encoding='utf-8', newline='')
+        fields = []
+        with file:
+            fields.append('date')
+            for d in self.deploymentList:
+                fields.append(d.name + '_num_pods')
+                fields.append(d.name + '_cpu_usage')
+                fields.append(d.name + '_mem_usage')
+                fields.append(d.name + '_latency')
+
+            writer = csv.DictWriter(file, fieldnames=fields)
+            writer.writeheader()
+            writer.writerow(
+                {'date': date,
+                 'redis-leader_num_pods': int(f"{obs[0]}"),
+                 'redis-leader_cpu_usage': float(f"{obs[1]}"),
+                 'redis-leader_mem_usage': float(f"{obs[2]}"),
+                 'redis-leader_latency': float(f"{latency:.3f}"),
+                 'redis-follower_num_pods': float(f"{obs[5]}"),
+                 'redis-follower_cpu_usage': float(f"{obs[6]}"),
+                 'redis-follower_mem_usage': float(f"{obs[7]}"),
+                 'redis-follower_latency': float(f"{latency:.3f}")
+                 }
+            )
+        return

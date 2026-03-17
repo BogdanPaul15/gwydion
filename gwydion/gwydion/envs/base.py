@@ -2,11 +2,11 @@ from typing import List, Optional
 
 from datetime import datetime
 from statistics import mean
-import numpy as np
-import pandas as pd
 import time
 import csv
 
+import numpy as np
+import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
 
@@ -300,9 +300,10 @@ class BaseEnv(gym.Env):
         return np.array(ob), reward, self.terminated, self.episode_over, self.info
 
     # TODO: this simulation mode does work only for online_boutique simulation strategy
-    # redis environment has a different strategy
+    # redis environment has a different strategy (the redis strategy is prioritizing the deployment on which the last
+    # action was taken)
     # Note: There is a situation when it tries to scale beyond its limits, and the system ends up
-    # getting a random sample, instead of looking for a situation with the same number of pods,
+    # getting a random sample, instead of looking for a situation with the same number of pods
     def simulation_update(self):
         if self.current_step == 1:
             sample = self.df.sample()
@@ -380,30 +381,6 @@ class BaseEnv(gym.Env):
 
     def get_observation_space(self):
         raise NotImplementedError
-
+    
     def save_obs_to_csv(self, obs_file, obs, date, latency):
-        file = open(obs_file, 'a+', encoding='utf-8', newline='')
-        fields = []
-        with file:
-            fields.append('date')
-            for d in self.deploymentList:
-                fields.append(d.name + '_num_pods')
-                fields.append(d.name + '_cpu_usage')
-                fields.append(d.name + '_mem_usage')
-                fields.append(d.name + '_latency')
-
-            writer = csv.DictWriter(file, fieldnames=fields)
-            writer.writeheader()
-            writer.writerow(
-                {'date': date,
-                 'redis-leader_num_pods': int(f"{obs[0]}"),
-                 'redis-leader_cpu_usage': float(f"{obs[1]}"),
-                 'redis-leader_mem_usage': float(f"{obs[2]}"),
-                 'redis-leader_latency': float(f"{latency:.3f}"),
-                 'redis-follower_num_pods': float(f"{obs[3]}"),
-                 'redis-follower_cpu_usage': float(f"{obs[4]}"),
-                 'redis-follower_mem_usage': float(f"{obs[5]}"),
-                 'redis-follower_latency': float(f"{latency:.3f}")
-                 }
-            )
-        return
+        raise NotImplementedError
