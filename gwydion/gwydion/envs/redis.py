@@ -205,7 +205,8 @@ class Redis(base.BaseEnv):
                 fields.append(d.name + '_latency')
 
             writer = csv.DictWriter(file, fieldnames=fields)
-            writer.writeheader()
+            # TODO this writes an independent header for each row
+            # writer.writeheader()
             writer.writerow(
                 {'date': date,
                  'redis-leader_num_pods': int(f"{obs[0]}"),
