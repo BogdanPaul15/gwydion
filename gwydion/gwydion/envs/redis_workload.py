@@ -31,6 +31,7 @@ class RedisWorkload(workload.BaseDeploymentWorkload):
         self.metrics["mem_usage"] = 0
         self.metrics["received_traffic"] = 0
         self.metrics["transmit_traffic"] = 0
+        self.metrics["latency"] = 0.0
 
         # TODO: maybe this part can be aggregated into one query for each metric
         for pod in self.pod_names:
@@ -55,7 +56,7 @@ class RedisWorkload(workload.BaseDeploymentWorkload):
             if res_trans:
                 self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
 
-        # TODO: should not be hardcoded
+        # TODO: should not be hardcoded (replace with target deployment)
         if self.name == "redis-leader":
             query_dur = "sum(irate(redis_commands_duration_seconds_total[5m]))"
             query_proc = "sum(irate(redis_commands_processed_total[5m]))"

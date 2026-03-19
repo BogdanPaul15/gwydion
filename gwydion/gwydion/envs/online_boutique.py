@@ -218,6 +218,7 @@ class OnlineBoutique(base.BaseEnv):
 
     def get_state(self):
         ob = (
+<<<<<<< HEAD
             self.deployment_list[ID_recommendation].num_pods,
             self.deployment_list[ID_recommendation].metrics["cpu_usage"],
             self.deployment_list[ID_recommendation].metrics["mem_usage"],
@@ -251,6 +252,41 @@ class OnlineBoutique(base.BaseEnv):
             self.deployment_list[ID_email].num_pods,
             self.deployment_list[ID_email].metrics["cpu_usage"],
             self.deployment_list[ID_email].metrics["mem_usage"],
+=======
+            self.deploymentList[ID_recommendation].num_pods,
+            self.deploymentList[ID_recommendation].metrics["cpu_usage"],
+            self.deploymentList[ID_recommendation].metrics["mem_usage"],
+            self.deploymentList[ID_product_catalog].num_pods,
+            self.deploymentList[ID_product_catalog].metrics["cpu_usage"],
+            self.deploymentList[ID_product_catalog].metrics["mem_usage"],
+            self.deploymentList[ID_cart_service].num_pods,
+            self.deploymentList[ID_cart_service].metrics["cpu_usage"],
+            self.deploymentList[ID_cart_service].metrics["mem_usage"],
+            self.deploymentList[ID_ad_service].num_pods,
+            self.deploymentList[ID_ad_service].metrics["cpu_usage"],
+            self.deploymentList[ID_ad_service].metrics["mem_usage"],
+            self.deploymentList[ID_payment_service].num_pods,
+            self.deploymentList[ID_payment_service].metrics["cpu_usage"],
+            self.deploymentList[ID_payment_service].metrics["mem_usage"],
+            self.deploymentList[ID_shipping_service].num_pods,
+            self.deploymentList[ID_shipping_service].metrics["cpu_usage"],
+            self.deploymentList[ID_shipping_service].metrics["mem_usage"],
+            self.deploymentList[ID_currency_service].num_pods,
+            self.deploymentList[ID_currency_service].metrics["cpu_usage"],
+            self.deploymentList[ID_currency_service].metrics["mem_usage"],
+            self.deploymentList[ID_redis_cart].num_pods,
+            self.deploymentList[ID_redis_cart].metrics["cpu_usage"],
+            self.deploymentList[ID_redis_cart].metrics["mem_usage"],
+            self.deploymentList[ID_checkout_service].num_pods,
+            self.deploymentList[ID_checkout_service].metrics["cpu_usage"],
+            self.deploymentList[ID_checkout_service].metrics["mem_usage"],
+            self.deploymentList[ID_frontend].num_pods,
+            self.deploymentList[ID_frontend].metrics["cpu_usage"],
+            self.deploymentList[ID_frontend].metrics["mem_usage"],
+            self.deploymentList[ID_email].num_pods,
+            self.deploymentList[ID_email].metrics["cpu_usage"],
+            self.deploymentList[ID_email].metrics["mem_usage"],
+>>>>>>> 6da6a5e (refactor: modify environments to accept new deployment workload)
             self.none_counter,
         )
 
