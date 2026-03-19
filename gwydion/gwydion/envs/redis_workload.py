@@ -32,27 +32,28 @@ class RedisWorkload(workload.BaseDeploymentWorkload):
         self.metrics["received_traffic"] = 0
         self.metrics["transmit_traffic"] = 0
 
+        # TODO: maybe this part can be aggregated into one query for each metric
         for pod in self.pod_names:
             query_cpu = f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
             query_mem = f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
             query_rec = f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
             query_trans = f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
 
-        res_cpu = self.fetch_prom(query_cpu)
-        if res_cpu:
-            self.metrics["cpu_usage"] += int(float(res_cpu[0]["value"][1]) * 1000)
+            res_cpu = self.fetch_prom(query_cpu)
+            if res_cpu:
+                self.metrics["cpu_usage"] += int(float(res_cpu[0]["value"][1]) * 1000)
 
-        res_mem = self.fetch_prom(query_mem)
-        if res_mem:
-            self.metrics["mem_usage"] += int(float(res_mem[0]["value"][1]) / 1000000)
+            res_mem = self.fetch_prom(query_mem)
+            if res_mem:
+                self.metrics["mem_usage"] += int(float(res_mem[0]["value"][1]) / 1000000)
 
-        res_rec = self.fetch_prom(query_rec)
-        if res_rec:
-            self.metrics["received_traffic"] += int(float(res_rec[0]["value"][1]) / 1000)
+            res_rec = self.fetch_prom(query_rec)
+            if res_rec:
+                self.metrics["received_traffic"] += int(float(res_rec[0]["value"][1]) / 1000)
 
-        res_trans = self.fetch_prom(query_trans)
-        if res_trans:
-            self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
+            res_trans = self.fetch_prom(query_trans)
+            if res_trans:
+                self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
 
         # TODO: should not be hardcoded
         if self.name == "redis-leader":
