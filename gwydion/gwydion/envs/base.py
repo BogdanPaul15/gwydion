@@ -48,7 +48,7 @@ class BaseEnv(gym.Env):
         num_apps (int): The number of managed deployments.
         deployments_name (list[str]): Name of the K8s deployments.
         k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
-        goal_reward (str): The reward objective function.
+        reward_strategy (RewardStrategy): The reward objective function.
         waiting_period (int): Seconds to wait after a scaling action (real K8s only).
         min_pods (int): Minimum replica count allowed per deployment.
         max_pods (int): Maximum replica count allowed per deployment.
@@ -93,7 +93,7 @@ class BaseEnv(gym.Env):
             name (str): The unique name of the environment.
             num_apps (int): The number of managed deployments.
             k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
-            goal_reward (str): The reward objective function.
+            reward_strategy (RewardStrategy): The reward objective function.
             waiting_period (int): Seconds to wait after a scaling (real K8s only).
 
         """
@@ -225,7 +225,6 @@ class BaseEnv(gym.Env):
         self.avg_pods = []
         self.avg_latency = []
 
-        # TODO: should also reset self.action_stats, self.time_start, self.execution_time, self.info
         self.time_start = 0
         self.execution_time = 0
         self.info = {}
