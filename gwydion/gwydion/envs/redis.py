@@ -5,7 +5,6 @@ from gymnasium import spaces
 
 from gwydion.envs import base
 from gwydion.envs.deployment import get_redis_deployment_list
-from gwydion.envs.util import get_cost_reward, get_latency_reward_redis
 
 MAX_STEPS = 25  # MAX Number of steps per episode
 
@@ -30,13 +29,13 @@ ID_MASTER = 0
 
 class Redis(base.BaseEnv):
     """Horizontal Scaling for Redis in K8s - an Gymansium gym environment."""
-    def __init__(self, k8s=False, goal_reward=base.COST, waiting_period=5):
+    def __init__(self, k8s=False, reward_strategy=None, waiting_period=5):
         super().__init__(
             name="redis_gym",
             num_apps=2,
             deployments=["redis-leader", "redis-follower"],
             k8s=k8s,
-            goal_reward=goal_reward,
+            reward_strategy=reward_strategy,
             waiting_period=waiting_period
         )
 
@@ -57,7 +56,7 @@ class Redis(base.BaseEnv):
         self.deploymentList = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         return self.get_state(), self.info
-    
+
     def take_action(self, action, id):
         self.current_step += 1
 
@@ -73,7 +72,6 @@ class Redis(base.BaseEnv):
         if action == ACTION_DO_NOTHING:
             self.none_counter += 1
             print("[Take Action] SELECTED ACTION: DO NOTHING ...")
-            pass
 
         elif action == ACTION_ADD_1_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
@@ -134,19 +132,6 @@ class Redis(base.BaseEnv):
         else:
             print('[Take Action] Unrecognized Action: ' + str(action))
 
-    def calculate_reward(self):
-        reward = 0
-        if self.goal_reward == base.COST:
-            reward = get_cost_reward(self.deploymentList)
-            if reward !=2 and self.none_counter > 2:
-                reward = -self.none_counter
-        elif self.goal_reward == base.LATENCY:
-            reward = get_latency_reward_redis(ID_MASTER, self.deploymentList)
-            if self.none_counter > 2:
-                reward = -self.none_counter * 250
-
-        return reward
-
     def get_observation_space(self):
         return spaces.Box(
             low=np.array([
@@ -160,6 +145,7 @@ class Redis(base.BaseEnv):
                 0, # MEM Usage (in MiB)
                 0, # CPU forecast (in m)
                 0, # MEM forecast (in MiB)
+                0, # None counter
             ]),
             high=np.array([
                 self.max_pods, # Number of pods -- leader
@@ -172,6 +158,7 @@ class Redis(base.BaseEnv):
                 1000, # MEM Usage (in MiB)
                 1000, # CPU forecast (in m)
                 1000, # MEM forecast (in MiB)
+                10, # None counter
             ]),
             dtype=np.float32
         )
@@ -219,4 +206,3 @@ class Redis(base.BaseEnv):
                  'redis-follower_latency': float(f"{latency:.3f}")
                  }
             )
-        return

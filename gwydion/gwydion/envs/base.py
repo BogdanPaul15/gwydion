@@ -3,7 +3,6 @@ from typing import List, Optional
 from datetime import datetime
 from statistics import mean
 import time
-import csv
 
 import numpy as np
 import pandas as pd
@@ -11,14 +10,12 @@ import gymnasium as gym
 from gymnasium import spaces
 
 from gwydion.envs.util import get_num_pods, save_to_csv
+from gwydion.envs.rewards import RewardStrategy
 
 MIN_REPLICATION = 1
 MAX_REPLICATION = 8
 MAX_STEPS = 25
 ACTION_MOVES_COUNT = 15
-
-COST = "cost"
-LATENCY = "latency"
 
 ID_DEPLOYMENTS = 0
 ID_MOVES = 1
@@ -51,7 +48,7 @@ class BaseEnv(gym.Env):
         num_apps (int): The number of managed deployments.
         deployments_name (list[str]): Name of the K8s deployments.
         k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
-        goal_reward (str): The reward objective function.
+        reward_strategy (RewardStrategy): The reward objective function.
         waiting_period (int): Seconds to wait after a scaling action (real K8s only).
         min_pods (int): Minimum replica count allowed per deployment.
         max_pods (int): Maximum replica count allowed per deployment.
@@ -89,14 +86,14 @@ class BaseEnv(gym.Env):
             (e.g., CPU, memory, traffic) used to drive the simulation.
     """
     def __init__(self, name: str, num_apps: int, deployments: List[str],
-                 k8s: bool = False, goal_reward: str = COST, waiting_period: int = 5):
+                 k8s: bool = False, reward_strategy: RewardStrategy = None, waiting_period: int = 5):
         """Initializes the BaseEnv with scaling constraints and core attributes.
 
         Args:
             name (str): The unique name of the environment.
             num_apps (int): The number of managed deployments.
             k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
-            goal_reward (str): The reward objective function.
+            reward_strategy (RewardStrategy): The reward objective function.
             waiting_period (int): Seconds to wait after a scaling (real K8s only).
 
         """
@@ -106,7 +103,7 @@ class BaseEnv(gym.Env):
         self.num_apps = num_apps
         self.deployments_names = deployments
         self.k8s = k8s
-        self.goal_reward = goal_reward
+        self.reward_strategy = reward_strategy
         self.waiting_period = waiting_period
         self.__version__ = "0.0.1"
 
@@ -123,7 +120,7 @@ class BaseEnv(gym.Env):
         self.total_reward = 0
         self.info = {}
 
-        # TODO: refactor
+        # TODO: replace 
         self.num_actions = ACTION_MOVES_COUNT
         self.none_counter = 0
         self.action_stats = [0 for _ in range(self.num_actions)]
@@ -140,7 +137,6 @@ class BaseEnv(gym.Env):
         self.observation_space = None
 
         # TODO: MODIFY THIS
-        self.latency_penalty = 250
         # self.obs_file = f"{self.name}_observations.csv"
 
         self.df = None
@@ -217,7 +213,7 @@ class BaseEnv(gym.Env):
         """
         super().reset(seed=seed)
 
-        # TODO self.none_counter should be added here as well
+        # TODO: self.none_counter should be added here as well
         self.current_step = 0
         self.total_reward = 0
 
@@ -229,7 +225,6 @@ class BaseEnv(gym.Env):
         self.avg_pods = []
         self.avg_latency = []
 
-        # TODO should also reset self.action_stats, self.time_start, self.execution_time, self.info
         self.time_start = 0
         self.execution_time = 0
         self.info = {}
@@ -274,6 +269,7 @@ class BaseEnv(gym.Env):
 
         self.total_reward += reward
         self.avg_pods.append(get_num_pods(self.deploymentList))
+        # TODO replace 0 with target_id (the target deployment)
         self.avg_latency.append(self.deploymentList[0].latency)
 
         self.info = {
@@ -285,7 +281,8 @@ class BaseEnv(gym.Env):
 
         ob = self.get_state()
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # TODO should be called before normalizing the observations
+        # TODO: should be called before normalizing the observations
+        # TODO: replace 0 with target_id (the target deployment)
         self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deploymentList[0].latency)
 
         self.constraint_min_pod_replicas = False
@@ -356,31 +353,15 @@ class BaseEnv(gym.Env):
     def take_action(self, action, id):
         raise NotImplementedError
 
-    def calculate_reward(self):
-        raise NotImplementedError
-
     @property
     def get_reward(self):
-        if self.constraint_min_pod_replicas:
-            if self.goal_reward == COST:
-                return -1
-            elif self.goal_reward == LATENCY:
-                return -self.latency_penalty
-
-        if self.constraint_max_pod_replicas:
-            if self.goal_reward == COST:
-                return -1
-            elif self.goal_reward == LATENCY:
-                return -self.latency_penalty
-
-        reward = self.calculate_reward()
-        return reward
+        return self.reward_strategy.get_reward(self)
 
     def get_state(self):
         raise NotImplementedError
 
     def get_observation_space(self):
         raise NotImplementedError
-    
+
     def save_obs_to_csv(self, obs_file, obs, date, latency):
         raise NotImplementedError

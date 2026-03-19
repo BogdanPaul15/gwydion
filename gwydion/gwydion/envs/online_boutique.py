@@ -4,7 +4,6 @@ import numpy as np
 from gymnasium import spaces
 from gwydion.envs import base
 from gwydion.envs.deployment import get_online_boutique_deployment_list
-from gwydion.envs.util import get_cost_reward, get_latency_reward_online_boutique
 
 MAX_STEPS = 25 # MAX Number of steps per episode
 
@@ -39,7 +38,7 @@ ID_email = 10
 
 class OnlineBoutique(base.BaseEnv):
     """Horizontal Scaling for Online Boutique in K8s - an Gymnasium gym environment."""
-    def __init__(self, k8s=False, goal_reward=base.COST, waiting_period=5):
+    def __init__(self, k8s=False, reward_strategy=None, waiting_period=5):
         super().__init__(
             name="online_boutique_gym",
             num_apps=11,
@@ -47,7 +46,7 @@ class OnlineBoutique(base.BaseEnv):
                         "adservice", "paymentservice", "shippingservice", "currencyservice",
                         "redis-cart", "checkoutservice", "frontend", "emailservice"],
             k8s=k8s,
-            goal_reward=goal_reward,
+            reward_strategy=reward_strategy,
             waiting_period=waiting_period
         )
 
@@ -68,7 +67,7 @@ class OnlineBoutique(base.BaseEnv):
         self.deploymentList = get_online_boutique_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         return self.get_state(), self.info
-    
+
     def take_action(self, action, id):
         self.current_step += 1
 
@@ -81,7 +80,6 @@ class OnlineBoutique(base.BaseEnv):
         if action == ACTION_DO_NOTHING:
             self.none_counter += 1
             print("[Take Action] SELECTED ACTION: DO NOTHING ...")
-            pass
 
         elif action == ACTION_ADD_1_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
@@ -142,19 +140,6 @@ class OnlineBoutique(base.BaseEnv):
         else:
             print('[Take Action] Unrecognized Action: ' + str(action))
 
-    def calculate_reward(self):
-        reward = 0
-        if self.goal_reward == base.COST:
-            reward = get_cost_reward(self.deploymentList)
-            if reward != self.num_apps and self.none_counter > 2:
-                reward = -self.none_counter
-        elif self.goal_reward == base.LATENCY:
-            reward = get_latency_reward_online_boutique(ID_recommendation, self.deploymentList)
-            if self.none_counter > 2 and reward > 3000.0:
-                reward = -3000 * self.none_counter
-
-        return reward
-    
     def get_observation_space(self):
         return spaces.Box(
             low=np.array([
@@ -234,27 +219,38 @@ class OnlineBoutique(base.BaseEnv):
     def get_state(self):
         ob = (
             self.deploymentList[ID_recommendation].num_pods,
-            self.deploymentList[ID_recommendation].cpu_usage, self.deploymentList[ID_recommendation].mem_usage,
+            self.deploymentList[ID_recommendation].cpu_usage,
+            self.deploymentList[ID_recommendation].mem_usage,
             self.deploymentList[ID_product_catalog].num_pods,
-            self.deploymentList[ID_product_catalog].cpu_usage, self.deploymentList[ID_product_catalog].mem_usage,
+            self.deploymentList[ID_product_catalog].cpu_usage,
+            self.deploymentList[ID_product_catalog].mem_usage,
             self.deploymentList[ID_cart_service].num_pods,
-            self.deploymentList[ID_cart_service].cpu_usage, self.deploymentList[ID_cart_service].mem_usage,
+            self.deploymentList[ID_cart_service].cpu_usage,
+            self.deploymentList[ID_cart_service].mem_usage,
             self.deploymentList[ID_ad_service].num_pods,
-            self.deploymentList[ID_ad_service].cpu_usage, self.deploymentList[ID_ad_service].mem_usage,
+            self.deploymentList[ID_ad_service].cpu_usage,
+            self.deploymentList[ID_ad_service].mem_usage,
             self.deploymentList[ID_payment_service].num_pods,
-            self.deploymentList[ID_payment_service].cpu_usage, self.deploymentList[ID_payment_service].mem_usage,
+            self.deploymentList[ID_payment_service].cpu_usage,
+            self.deploymentList[ID_payment_service].mem_usage,
             self.deploymentList[ID_shipping_service].num_pods,
-            self.deploymentList[ID_shipping_service].cpu_usage, self.deploymentList[ID_shipping_service].mem_usage,
+            self.deploymentList[ID_shipping_service].cpu_usage,
+            self.deploymentList[ID_shipping_service].mem_usage,
             self.deploymentList[ID_currency_service].num_pods,
-            self.deploymentList[ID_currency_service].cpu_usage, self.deploymentList[ID_currency_service].mem_usage,
+            self.deploymentList[ID_currency_service].cpu_usage,
+            self.deploymentList[ID_currency_service].mem_usage,
             self.deploymentList[ID_redis_cart].num_pods,
-            self.deploymentList[ID_redis_cart].cpu_usage, self.deploymentList[ID_redis_cart].mem_usage,
+            self.deploymentList[ID_redis_cart].cpu_usage,
+            self.deploymentList[ID_redis_cart].mem_usage,
             self.deploymentList[ID_checkout_service].num_pods,
-            self.deploymentList[ID_checkout_service].cpu_usage, self.deploymentList[ID_checkout_service].mem_usage,
+            self.deploymentList[ID_checkout_service].cpu_usage,
+            self.deploymentList[ID_checkout_service].mem_usage,
             self.deploymentList[ID_frontend].num_pods,
-            self.deploymentList[ID_frontend].cpu_usage, self.deploymentList[ID_frontend].mem_usage,
+            self.deploymentList[ID_frontend].cpu_usage,
+            self.deploymentList[ID_frontend].mem_usage,
             self.deploymentList[ID_email].num_pods,
-            self.deploymentList[ID_email].cpu_usage, self.deploymentList[ID_email].mem_usage,
+            self.deploymentList[ID_email].cpu_usage,
+            self.deploymentList[ID_email].mem_usage,
             self.none_counter,
         )
 
@@ -311,4 +307,3 @@ class OnlineBoutique(base.BaseEnv):
                  'emailservice_mem_usage': int(f"{obs[32]}"),
                  }
             )
-        return
