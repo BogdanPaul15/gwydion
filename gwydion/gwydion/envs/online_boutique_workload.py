@@ -35,9 +35,13 @@ class OnlineBoutiqueWorkload(workload.BaseDeploymentWorkload):
 
         # TODO: maybe this part can be aggregated into one query for each metric
         for pod in self.pod_names:
+            # f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}'}}[5m]))"
             query_cpu = f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
+            # f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}'}}[5m]))""
             query_mem = f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
+            # f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}'}}[5m]))"
             query_rec = f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
+            # f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}'}}[5m]))"
             query_trans = f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
 
             res_cpu = self.fetch_prom(query_cpu)
