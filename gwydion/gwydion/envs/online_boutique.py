@@ -50,7 +50,7 @@ class OnlineBoutique(base.BaseEnv):
             waiting_period=waiting_period
         )
 
-        self.deploymentList = get_online_boutique_deployment_list(self.k8s, self.min_pods, self.max_pods)
+        self.deployment_list = get_online_boutique_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         self.observation_space = self.get_observation_space()
 
@@ -64,7 +64,7 @@ class OnlineBoutique(base.BaseEnv):
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
-        self.deploymentList = get_online_boutique_deployment_list(self.k8s, self.min_pods, self.max_pods)
+        self.deployment_list = get_online_boutique_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         return self.get_state(), self.info
 
@@ -83,59 +83,59 @@ class OnlineBoutique(base.BaseEnv):
 
         elif action == ACTION_ADD_1_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
-            self.deploymentList[id].deploy_pod_replicas(1, self)
+            self.deployment_list[id].deploy_pod_replicas(1, self)
 
         elif action == ACTION_ADD_2_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 2 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(2, self)
+            self.deployment_list[id].deploy_pod_replicas(2, self)
 
         elif action == ACTION_ADD_3_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 3 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(3, self)
+            self.deployment_list[id].deploy_pod_replicas(3, self)
 
         elif action == ACTION_ADD_4_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 4 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(4, self)
+            self.deployment_list[id].deploy_pod_replicas(4, self)
 
         elif action == ACTION_ADD_5_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 5 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(5, self)
+            self.deployment_list[id].deploy_pod_replicas(5, self)
 
         elif action == ACTION_ADD_6_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 6 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(6, self)
+            self.deployment_list[id].deploy_pod_replicas(6, self)
 
         elif action == ACTION_ADD_7_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 7 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(7, self)
+            self.deployment_list[id].deploy_pod_replicas(7, self)
 
         elif action == ACTION_TERMINATE_1_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 1 Replica ...")
-            self.deploymentList[id].terminate_pod_replicas(1, self)
+            self.deployment_list[id].terminate_pod_replicas(1, self)
 
         elif action == ACTION_TERMINATE_2_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 2 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(2, self)
+            self.deployment_list[id].terminate_pod_replicas(2, self)
 
         elif action == ACTION_TERMINATE_3_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 3 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(3, self)
+            self.deployment_list[id].terminate_pod_replicas(3, self)
 
         elif action == ACTION_TERMINATE_4_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 4 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(4, self)
+            self.deployment_list[id].terminate_pod_replicas(4, self)
 
         elif action == ACTION_TERMINATE_5_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 5 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(5, self)
+            self.deployment_list[id].terminate_pod_replicas(5, self)
 
         elif action == ACTION_TERMINATE_6_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 6 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(6, self)
+            self.deployment_list[id].terminate_pod_replicas(6, self)
 
         elif action == ACTION_TERMINATE_7_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 7 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(7, self)
+            self.deployment_list[id].terminate_pod_replicas(7, self)
 
         else:
             print('[Take Action] Unrecognized Action: ' + str(action))
@@ -218,6 +218,7 @@ class OnlineBoutique(base.BaseEnv):
 
     def get_state(self):
         ob = (
+<<<<<<< Updated upstream
             self.deploymentList[ID_recommendation].num_pods,
             self.deploymentList[ID_recommendation].cpu_usage,
             self.deploymentList[ID_recommendation].mem_usage,
@@ -251,6 +252,41 @@ class OnlineBoutique(base.BaseEnv):
             self.deploymentList[ID_email].num_pods,
             self.deploymentList[ID_email].cpu_usage,
             self.deploymentList[ID_email].mem_usage,
+=======
+            self.deployment_list[ID_recommendation].num_pods,
+            self.deployment_list[ID_recommendation].metrics["cpu_usage"],
+            self.deployment_list[ID_recommendation].metrics["mem_usage"],
+            self.deployment_list[ID_product_catalog].num_pods,
+            self.deployment_list[ID_product_catalog].metrics["cpu_usage"],
+            self.deployment_list[ID_product_catalog].metrics["mem_usage"],
+            self.deployment_list[ID_cart_service].num_pods,
+            self.deployment_list[ID_cart_service].metrics["cpu_usage"],
+            self.deployment_list[ID_cart_service].metrics["mem_usage"],
+            self.deployment_list[ID_ad_service].num_pods,
+            self.deployment_list[ID_ad_service].metrics["cpu_usage"],
+            self.deployment_list[ID_ad_service].metrics["mem_usage"],
+            self.deployment_list[ID_payment_service].num_pods,
+            self.deployment_list[ID_payment_service].metrics["cpu_usage"],
+            self.deployment_list[ID_payment_service].metrics["mem_usage"],
+            self.deployment_list[ID_shipping_service].num_pods,
+            self.deployment_list[ID_shipping_service].metrics["cpu_usage"],
+            self.deployment_list[ID_shipping_service].metrics["mem_usage"],
+            self.deployment_list[ID_currency_service].num_pods,
+            self.deployment_list[ID_currency_service].metrics["cpu_usage"],
+            self.deployment_list[ID_currency_service].metrics["mem_usage"],
+            self.deployment_list[ID_redis_cart].num_pods,
+            self.deployment_list[ID_redis_cart].metrics["cpu_usage"],
+            self.deployment_list[ID_redis_cart].metrics["mem_usage"],
+            self.deployment_list[ID_checkout_service].num_pods,
+            self.deployment_list[ID_checkout_service].metrics["cpu_usage"],
+            self.deployment_list[ID_checkout_service].metrics["mem_usage"],
+            self.deployment_list[ID_frontend].num_pods,
+            self.deployment_list[ID_frontend].metrics["cpu_usage"],
+            self.deployment_list[ID_frontend].metrics["mem_usage"],
+            self.deployment_list[ID_email].num_pods,
+            self.deployment_list[ID_email].metrics["cpu_usage"],
+            self.deployment_list[ID_email].metrics["mem_usage"],
+>>>>>>> Stashed changes
             self.none_counter,
         )
 

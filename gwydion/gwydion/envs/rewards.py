@@ -67,7 +67,7 @@ class CostStrategy(RewardStrategy):
     desired state, forcing the agent to avoid sub-optimal states.
     """
     def calculate(self, env):
-        reward = sum(1 for d in env.deploymentList if d.num_pods == d.desired_replicas)
+        reward = sum(1 for d in env.deployment_list if d.num_pods == d.desired_replicas)
 
         if reward != len(env.num_apps) and env.none_counter > 2:
             reward = -env.none_counter
@@ -93,7 +93,7 @@ class LatencyStrategy(RewardStrategy):
         self.threshold = threshold
 
     def calculate(self, env):
-        latency = float(env.deploymentList[self.target_id].latency)
+        latency = float(env.deployment_list[self.target_id].latency)
 
         reward = -min(latency, self.threshold)
 

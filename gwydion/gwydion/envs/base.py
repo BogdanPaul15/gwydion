@@ -75,7 +75,7 @@ class BaseEnv(gym.Env):
             at each step of the current episode (e.g., index 0 corresponds to the first step).
         time_start (float): The timestamp (in seconds) representing when the episode started.
         execution_time (float): Total duration (in seconds) taken to complete the current episode.
-        deploymentList (List[DeploymentStatus]): A list of DeploymentStatus objects representing
+        deployment_list (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects representing
             the current state and metrics for each active K8s deployment.
         action_space (gym.spaces.MultiDiscrete): A 2-dimensional action vector where the first
             element selects which deployment to scale (0 to num_apps - 1) and the second element
@@ -131,8 +131,7 @@ class BaseEnv(gym.Env):
         self.time_start = 0
         self.execution_time = 0
 
-        # TODO: rename the attribute
-        self.deploymentList = []
+        self.deployment_list = []
         self.action_space = spaces.MultiDiscrete([num_apps, self.num_actions])
         self.observation_space = None
 
@@ -144,11 +143,11 @@ class BaseEnv(gym.Env):
     def load_dataset(self):
         """Loads the simulation dataframe using deployment metadata.
         
-        This must be called AFTER self.deploymentList is initialized in the child class.
+        This must be called AFTER self.deployment_list is initialized in the child class.
         """
         if not self.k8s:
             # Get namespace from the first deployment in the list
-            namespace = self.deploymentList[0].namespace
+            namespace = self.deployment_list[0].namespace
             path = f"datasets/real/{namespace}/v1/{self.name}_observation.csv"
 
             try:
@@ -230,7 +229,7 @@ class BaseEnv(gym.Env):
         self.info = {}
         self.action_stats = [0 for _ in range(self.num_actions)]
 
-        # Note: self.deploymentList should be reinitialized in the child
+        # Note: self.deployment_list should be reinitialized in the child
         # after calling super().reset()
 
         # Note: Child class will implement the actual return.
@@ -260,7 +259,7 @@ class BaseEnv(gym.Env):
             if action[ID_MOVES] != ACTION_DO_NOTHING and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
                 time.sleep(self.waiting_period)
 
-            for d in self.deploymentList:
+            for d in self.deployment_list:
                 d.update_k8s_obs()
         else:
             self.simulation_update()
@@ -268,9 +267,9 @@ class BaseEnv(gym.Env):
         reward = self.get_reward
 
         self.total_reward += reward
-        self.avg_pods.append(get_num_pods(self.deploymentList))
+        self.avg_pods.append(get_num_pods(self.deployment_list))
         # TODO replace 0 with target_id (the target deployment)
-        self.avg_latency.append(self.deploymentList[0].latency)
+        self.avg_latency.append(self.deployment_list[0].metrics["latency"])
 
         self.info = {
             "reward": f"{self.total_reward:.2f}",
@@ -283,7 +282,7 @@ class BaseEnv(gym.Env):
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # TODO: should be called before normalizing the observations
         # TODO: replace 0 with target_id (the target deployment)
-        self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deploymentList[0].latency)
+        self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deployment_list[0].metrics["latency"])
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
@@ -306,8 +305,8 @@ class BaseEnv(gym.Env):
             sample = self.df.sample()
 
             for i, name in enumerate(self.deployments_names):
-                self.deploymentList[i].num_pods = int(sample[f"{name}_num_pods"].values[0])
-                self.deploymentList[i].num_previous_pods = int(sample[f"{name}_num_pods"].values[0])
+                self.deployment_list[i].num_pods = int(sample[f"{name}_num_pods"].values[0])
+                self.deployment_list[i].num_previous_pods = int(sample[f"{name}_num_pods"].values[0])
 
         else:
             pods = []
@@ -316,8 +315,8 @@ class BaseEnv(gym.Env):
             data = self.df
 
             for i, name in enumerate(self.deployments_names):
-                pods.append(self.deploymentList[i].num_pods)
-                previous_pods.append(self.deploymentList[i].num_previous_pods)
+                pods.append(self.deployment_list[i].num_pods)
+                previous_pods.append(self.deployment_list[i].num_previous_pods)
                 aux = pods[i] - previous_pods[i]
                 diff.append(aux)
                 self.df[f"diff-{name}"] = self.df[f"{name}_num_pods"].diff()
@@ -339,14 +338,14 @@ class BaseEnv(gym.Env):
             sample = data.sample()
 
         for i, name in enumerate(self.deployments_names):
-            self.deploymentList[i].cpu_usage = int(sample[f"{name}_cpu_usage"].values[0])
-            self.deploymentList[i].mem_usage = int(sample[f"{name}_mem_usage"].values[0])
-            self.deploymentList[i].received_traffic = int(sample[f"{name}_traffic_in"].values[0])
-            self.deploymentList[i].transmit_traffic = int(sample[f"{name}_traffic_out"].values[0])
-            self.deploymentList[i].latency = float(f"{sample[f'{name}_latency'].values[0]:.3f}")
+            self.deployment_list[i].metrics["cpu_usage"] = int(sample[f"{name}_cpu_usage"].values[0])
+            self.deployment_list[i].metrics["mem_usage"] = int(sample[f"{name}_mem_usage"].values[0])
+            self.deployment_list[i].metrics["received_traffic"] = int(sample[f"{name}_traffic_in"].values[0])
+            self.deployment_list[i].metrics["transmit_traffic"] = int(sample[f"{name}_traffic_out"].values[0])
+            self.deployment_list[i].metrics["latency"] = float(f"{sample[f'{name}_latency'].values[0]:.3f}")
 
-        for d in self.deploymentList:
-            d.update_replicas()
+        for d in self.deployment_list:
+            d.update_desired_replicas()
 
         return
 
