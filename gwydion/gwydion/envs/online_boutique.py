@@ -218,41 +218,6 @@ class OnlineBoutique(base.BaseEnv):
 
     def get_state(self):
         ob = (
-<<<<<<< Updated upstream
-            self.deploymentList[ID_recommendation].num_pods,
-            self.deploymentList[ID_recommendation].cpu_usage,
-            self.deploymentList[ID_recommendation].mem_usage,
-            self.deploymentList[ID_product_catalog].num_pods,
-            self.deploymentList[ID_product_catalog].cpu_usage,
-            self.deploymentList[ID_product_catalog].mem_usage,
-            self.deploymentList[ID_cart_service].num_pods,
-            self.deploymentList[ID_cart_service].cpu_usage,
-            self.deploymentList[ID_cart_service].mem_usage,
-            self.deploymentList[ID_ad_service].num_pods,
-            self.deploymentList[ID_ad_service].cpu_usage,
-            self.deploymentList[ID_ad_service].mem_usage,
-            self.deploymentList[ID_payment_service].num_pods,
-            self.deploymentList[ID_payment_service].cpu_usage,
-            self.deploymentList[ID_payment_service].mem_usage,
-            self.deploymentList[ID_shipping_service].num_pods,
-            self.deploymentList[ID_shipping_service].cpu_usage,
-            self.deploymentList[ID_shipping_service].mem_usage,
-            self.deploymentList[ID_currency_service].num_pods,
-            self.deploymentList[ID_currency_service].cpu_usage,
-            self.deploymentList[ID_currency_service].mem_usage,
-            self.deploymentList[ID_redis_cart].num_pods,
-            self.deploymentList[ID_redis_cart].cpu_usage,
-            self.deploymentList[ID_redis_cart].mem_usage,
-            self.deploymentList[ID_checkout_service].num_pods,
-            self.deploymentList[ID_checkout_service].cpu_usage,
-            self.deploymentList[ID_checkout_service].mem_usage,
-            self.deploymentList[ID_frontend].num_pods,
-            self.deploymentList[ID_frontend].cpu_usage,
-            self.deploymentList[ID_frontend].mem_usage,
-            self.deploymentList[ID_email].num_pods,
-            self.deploymentList[ID_email].cpu_usage,
-            self.deploymentList[ID_email].mem_usage,
-=======
             self.deployment_list[ID_recommendation].num_pods,
             self.deployment_list[ID_recommendation].metrics["cpu_usage"],
             self.deployment_list[ID_recommendation].metrics["mem_usage"],
@@ -286,7 +251,6 @@ class OnlineBoutique(base.BaseEnv):
             self.deployment_list[ID_email].num_pods,
             self.deployment_list[ID_email].metrics["cpu_usage"],
             self.deployment_list[ID_email].metrics["mem_usage"],
->>>>>>> Stashed changes
             self.none_counter,
         )
 
@@ -298,7 +262,7 @@ class OnlineBoutique(base.BaseEnv):
         fields = []
         with file:
             fields.append('date')
-            for d in self.deploymentList:
+            for d in self.deployment_list:
                 fields.append(d.name + '_num_pods')
                 fields.append(d.name + '_cpu_usage')
                 fields.append(d.name + '_mem_usage')
@@ -311,6 +275,7 @@ class OnlineBoutique(base.BaseEnv):
                  'recommendationservice_num_pods': int(f"{obs[0]}"),
                  'recommendationservice_cpu_usage': int(f"{obs[1]}"),
                  'recommendationservice_mem_usage': int(f"{obs[2]}"),
+                 'recommendationservice_latency': float(f"{latency:.3f}"),
                  'productcatalogservice_num_pods': int(f"{obs[3]}"),
                  'productcatalogservice_cpu_usage': int(f"{obs[4]}"),
                  'productcatalogservice_mem_usage': int(f"{obs[5]}"),

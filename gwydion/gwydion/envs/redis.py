@@ -39,7 +39,7 @@ class Redis(base.BaseEnv):
             waiting_period=waiting_period
         )
 
-        self.deploymentList = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
+        self.deployment_list = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         self.observation_space = self.get_observation_space()
 
@@ -48,12 +48,13 @@ class Redis(base.BaseEnv):
 
         if not k8s:
             self.load_dataset()
+            # TODO: replace with target deployment
             self.traffic = self.simulation_traffic("redis-leader")
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
-        self.deploymentList = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
+        self.deployment_list = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         return self.get_state(), self.info
 
@@ -75,59 +76,59 @@ class Redis(base.BaseEnv):
 
         elif action == ACTION_ADD_1_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
-            self.deploymentList[id].deploy_pod_replicas(1, self)
+            self.deployment_list[id].deploy_pod_replicas(1, self)
 
         elif action == ACTION_ADD_2_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 2 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(2, self)
+            self.deployment_list[id].deploy_pod_replicas(2, self)
 
         elif action == ACTION_ADD_3_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 3 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(3, self)
+            self.deployment_list[id].deploy_pod_replicas(3, self)
 
         elif action == ACTION_ADD_4_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 4 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(4, self)
+            self.deployment_list[id].deploy_pod_replicas(4, self)
 
         elif action == ACTION_ADD_5_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 5 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(5, self)
+            self.deployment_list[id].deploy_pod_replicas(5, self)
 
         elif action == ACTION_ADD_6_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 6 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(6, self)
+            self.deployment_list[id].deploy_pod_replicas(6, self)
 
         elif action == ACTION_ADD_7_REPLICA:
             print("[Take Action] SELECTED ACTION: ADD 7 Replicas ...")
-            self.deploymentList[id].deploy_pod_replicas(7, self)
+            self.deployment_list[id].deploy_pod_replicas(7, self)
 
         elif action == ACTION_TERMINATE_1_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 1 Replica ...")
-            self.deploymentList[id].terminate_pod_replicas(1, self)
+            self.deployment_list[id].terminate_pod_replicas(1, self)
 
         elif action == ACTION_TERMINATE_2_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 2 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(2, self)
+            self.deployment_list[id].terminate_pod_replicas(2, self)
 
         elif action == ACTION_TERMINATE_3_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 3 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(3, self)
+            self.deployment_list[id].terminate_pod_replicas(3, self)
 
         elif action == ACTION_TERMINATE_4_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 4 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(4, self)
+            self.deployment_list[id].terminate_pod_replicas(4, self)
 
         elif action == ACTION_TERMINATE_5_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 5 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(5, self)
+            self.deployment_list[id].terminate_pod_replicas(5, self)
 
         elif action == ACTION_TERMINATE_6_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 6 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(6, self)
+            self.deployment_list[id].terminate_pod_replicas(6, self)
 
         elif action == ACTION_TERMINATE_7_REPLICA:
             print("[Take Action] SELECTED ACTION: TERMINATE 7 Replicas ...")
-            self.deploymentList[id].terminate_pod_replicas(7, self)
+            self.deployment_list[id].terminate_pod_replicas(7, self)
 
         else:
             print('[Take Action] Unrecognized Action: ' + str(action))
@@ -138,26 +139,26 @@ class Redis(base.BaseEnv):
                 self.min_pods, # Number of pods -- leader
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
-                0, # CPU forecast (in m)
-                0, # MEM forecast (in MiB)
+                # 0, # CPU forecast (in m)
+                # 0, # MEM forecast (in MiB)
                 self.min_pods, # Number of pods -- follower
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
-                0, # CPU forecast (in m)
-                0, # MEM forecast (in MiB)
+                # 0, # CPU forecast (in m)
+                # 0, # MEM forecast (in MiB)
                 0, # None counter
             ]),
             high=np.array([
                 self.max_pods, # Number of pods -- leader
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
-                1000, # CPU forecast (in m)
-                1000, # MEM forecast (in MiB)
+                # 1000, # CPU forecast (in m)
+                # 1000, # MEM forecast (in MiB)
                 self.max_pods, # Number of pods -- follower
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
-                1000, # CPU forecast (in m)
-                1000, # MEM forecast (in MiB)
+                # 1000, # CPU forecast (in m)
+                # 1000, # MEM forecast (in MiB)
                 10, # None counter
             ]),
             dtype=np.float32
@@ -165,16 +166,16 @@ class Redis(base.BaseEnv):
 
     def get_state(self):
         ob = (
-            self.deploymentList[0].num_pods, # Number of pods -- leader
-            self.deploymentList[0].cpu_usage, #  CPU Usage (in m)
-            self.deploymentList[0].mem_usage, # MEM Usage (in MiB)
-            self.deploymentList[0].cpu_forecast, # CPU forecast (in m)
-            self.deploymentList[0].mem_forecast, # MEM forecast (in MiB)
-            self.deploymentList[1].num_pods, # Number of pods -- follower
-            self.deploymentList[1].cpu_usage, #  CPU Usage (in m)
-            self.deploymentList[1].mem_usage, # MEM Usage (in MiB)
-            self.deploymentList[1].cpu_forecast, # CPU forecast (in m)
-            self.deploymentList[1].mem_forecast, # MEM forecast (in MiB)
+            self.deployment_list[0].num_pods, # Number of pods -- leader
+            self.deployment_list[0].metrics["cpu_usage"], #  CPU Usage (in m)
+            self.deployment_list[0].metrics["mem_usage"], # MEM Usage (in MiB)
+            # self.deployment_list[0].cpu_forecast, # CPU forecast (in m)
+            # self.deployment_list[0].mem_forecast, # MEM forecast (in MiB)
+            self.deployment_list[1].num_pods, # Number of pods -- follower
+            self.deployment_list[1].metrics["cpu_usage"], #  CPU Usage (in m)
+            self.deployment_list[1].metrics["mem_usage"], # MEM Usage (in MiB)
+            # self.deployment_list[1].cpu_forecast, # CPU forecast (in m)
+            # self.deployment_list[1].mem_forecast, # MEM forecast (in MiB)
         )
 
         # return self.normalize(ob)
@@ -185,7 +186,7 @@ class Redis(base.BaseEnv):
         fields = []
         with file:
             fields.append('date')
-            for d in self.deploymentList:
+            for d in self.deployment_list:
                 fields.append(d.name + '_num_pods')
                 fields.append(d.name + '_cpu_usage')
                 fields.append(d.name + '_mem_usage')
@@ -197,12 +198,11 @@ class Redis(base.BaseEnv):
             writer.writerow(
                 {'date': date,
                  'redis-leader_num_pods': int(f"{obs[0]}"),
-                 'redis-leader_cpu_usage': float(f"{obs[1]}"),
-                 'redis-leader_mem_usage': float(f"{obs[2]}"),
+                 'redis-leader_cpu_usage': int(f"{obs[1]}"),
+                 'redis-leader_mem_usage': int(f"{obs[2]}"),
                  'redis-leader_latency': float(f"{latency:.3f}"),
-                 'redis-follower_num_pods': float(f"{obs[5]}"),
-                 'redis-follower_cpu_usage': float(f"{obs[6]}"),
-                 'redis-follower_mem_usage': float(f"{obs[7]}"),
-                 'redis-follower_latency': float(f"{latency:.3f}")
+                 'redis-follower_num_pods': int(f"{obs[3]}"),
+                 'redis-follower_cpu_usage': int(f"{obs[4]}"),
+                 'redis-follower_mem_usage': int(f"{obs[5]}"),
                  }
             )
