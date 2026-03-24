@@ -1,7 +1,9 @@
 import math
 
 from gwydion.envs import workload
+from gwydion.envs.workload_registry import register
 
+@register("online_boutique")
 class OnlineBoutiqueWorkload(workload.BaseDeploymentWorkload):
     """Concrete workload implementation for Online Boutique gym environment.
 

@@ -3,9 +3,6 @@ import csv
 import numpy as np
 from gymnasium import spaces
 from gwydion.envs import base
-from gwydion.envs.deployment import get_online_boutique_deployment_list
-
-MAX_STEPS = 25 # MAX Number of steps per episode
 
 # Possible Actions (Discrete)
 ACTION_DO_NOTHING = 0
@@ -38,41 +35,21 @@ ID_email = 10
 
 class OnlineBoutique(base.BaseEnv):
     """Horizontal Scaling for Online Boutique in K8s - an Gymnasium gym environment."""
-    def __init__(self, k8s=False, reward_strategy=None, waiting_period=5):
-        super().__init__(
-            name="online_boutique_gym",
-            num_apps=11,
-            deployments=["recommendationservice", "productcatalogservice", "cartservice",
-                        "adservice", "paymentservice", "shippingservice", "currencyservice",
-                        "redis-cart", "checkoutservice", "frontend", "emailservice"],
-            k8s=k8s,
-            reward_strategy=reward_strategy,
-            waiting_period=waiting_period
-        )
-
-        self.deployment_list = get_online_boutique_deployment_list(self.k8s, self.min_pods, self.max_pods)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.observation_space = self.get_observation_space()
 
-        # TODO remove this
-        self.file_results = "results.csv"
-
-        if not k8s:
-            self.load_dataset()
-            self.traffic = self.simulation_traffic("frontend")
-
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed, options=options)
-
-        self.deployment_list = get_online_boutique_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         return self.get_state(), self.info
 
     def take_action(self, action, id):
         self.current_step += 1
 
-        # Stop if MAX_STEPS
-        if self.current_step == MAX_STEPS:
+        # Stop if self.max_steps
+        if self.current_step == self.max_steps:
             print('[Take Action] MAX STEPS achieved, ending ...')
             self.episode_over = True
 
@@ -143,72 +120,72 @@ class OnlineBoutique(base.BaseEnv):
     def get_observation_space(self):
         return spaces.Box(
             low=np.array([
-                self.min_pods,  # Number of Pods  -- 1) recommendationservice
+                self.deployment_list[0].min_pods,  # Number of Pods  -- 1) recommendationservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 2) productcatalogservice
+                self.deployment_list[1].min_pods,  # Number of Pods -- 2) productcatalogservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 3) cartservice
+                self.deployment_list[2].min_pods,  # Number of Pods -- 3) cartservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 4) adservice
+                self.deployment_list[3].min_pods,  # Number of Pods -- 4) adservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 5) paymentservice
+                self.deployment_list[4].min_pods,  # Number of Pods -- 5) paymentservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 6) shippingservice
+                self.deployment_list[5].min_pods,  # Number of Pods -- 6) shippingservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 7) currencyservice
+                self.deployment_list[6].min_pods,  # Number of Pods -- 7) currencyservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 8) redis-cart
+                self.deployment_list[7].min_pods,  # Number of Pods -- 8) redis-cart
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 9) checkoutservice
+                self.deployment_list[8].min_pods,  # Number of Pods -- 9) checkoutservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 10) frontend
+                self.deployment_list[9].min_pods,  # Number of Pods -- 10) frontend
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.min_pods,  # Number of Pods -- 11) emailservice
+                self.deployment_list[10].min_pods,  # Number of Pods -- 11) emailservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
                 0,  # None Counter
             ]), high=np.array([
-                self.max_pods,  # Number of Pods -- 1)
+                self.deployment_list[0].max_pods,  # Number of Pods -- 1)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 2)
+                self.deployment_list[1].max_pods,  # Number of Pods -- 2)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 3)
+                self.deployment_list[2].max_pods,  # Number of Pods -- 3)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 4)
+                self.deployment_list[3].max_pods,  # Number of Pods -- 4)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 5)
+                self.deployment_list[4].max_pods,  # Number of Pods -- 5)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 6)
+                self.deployment_list[5].max_pods,  # Number of Pods -- 6)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 7)
+                self.deployment_list[6].max_pods,  # Number of Pods -- 7)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 8)
+                self.deployment_list[7].max_pods,  # Number of Pods -- 8)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 9)
+                self.deployment_list[8].max_pods,  # Number of Pods -- 9)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 10)
+                self.deployment_list[9].max_pods,  # Number of Pods -- 10)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.max_pods,  # Number of Pods -- 11)
+                self.deployment_list[10].max_pods,  # Number of Pods -- 11)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
                 10,      # None counter

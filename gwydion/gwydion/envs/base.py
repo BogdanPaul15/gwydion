@@ -1,20 +1,20 @@
 from typing import List, Optional
 
+import time
+from pathlib import Path
 from datetime import datetime
 from statistics import mean
-import time
+import yaml
 
 import numpy as np
 import pandas as pd
 import gymnasium as gym
 from gymnasium import spaces
 
-from gwydion.envs.util import get_num_pods, save_to_csv
 from gwydion.envs.rewards import RewardStrategy
+from gwydion.envs.workload_registry import build_deployment_list
+from gwydion.envs.util import save_to_csv
 
-MIN_REPLICATION = 1
-MAX_REPLICATION = 8
-MAX_STEPS = 25
 ACTION_MOVES_COUNT = 15
 
 ID_DEPLOYMENTS = 0
@@ -44,18 +44,22 @@ class BaseEnv(gym.Env):
     environments controlling pod replication in a K8s cluster or simulation.
 
     Attributes:
+        _cfg (dict): The raw configuration dictionary parsed from the YAML file.
+        _deployment_cfgs (List[dict]): List of raw deployment configurations 
+            extracted from the config file.
+        k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
         name (str): The unique name of the environment.
         num_apps (int): The number of managed deployments.
-        deployments_name (list[str]): Name of the K8s deployments.
-        k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
+        deployments_names (list[str]): Names of the K8s deployments.
+        deployment_list (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects representing
+            the current state and metrics for each active K8s deployment.
         reward_strategy (RewardStrategy): The reward objective function.
         waiting_period (int): Seconds to wait after a scaling action (real K8s only).
-        min_pods (int): Minimum replica count allowed per deployment.
-        max_pods (int): Maximum replica count allowed per deployment.
         constraint_min_pod_replicas (bool): Flag set to True if a scaling action 
             attempted to drop below MIN_REPLICATION.
         constraint_max_pod_replicas (bool): Flag set to True if a scaling action
             attempted to exceed MAX_REPLICATION.
+        max_steps (int): The maximum number of steps allowed per episode.
         current_step (int): Current step count in the active episode.
         episode_count (int): The total number of episodes completed since initialization.
         terminated (bool): Flag set to True if the agent reaches a terminal state
@@ -75,44 +79,41 @@ class BaseEnv(gym.Env):
             at each step of the current episode (e.g., index 0 corresponds to the first step).
         time_start (float): The timestamp (in seconds) representing when the episode started.
         execution_time (float): Total duration (in seconds) taken to complete the current episode.
-        deployment_list (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects representing
-            the current state and metrics for each active K8s deployment.
         action_space (gym.spaces.MultiDiscrete): A 2-dimensional action vector where the first
             element selects which deployment to scale (0 to num_apps - 1) and the second element
             defines the scaling action to perform (0 to num_actions - 1).
         observation_space (gym.spaces.Box): A multi-dimensional continuous space representing the
             state of the cluster (e.g., current pod counts, traffic)
+        file_results (str): A CSV file used to save the episode metrics.
         df (Optional[pd.DataFrame]): The primary dataset containing historical observations metrics
             (e.g., CPU, memory, traffic) used to drive the simulation.
     """
-    def __init__(self, name: str, num_apps: int, deployments: List[str],
-                 k8s: bool = False, reward_strategy: RewardStrategy = None, waiting_period: int = 5):
+    def __init__(self, config_path: str, reward_strategy: RewardStrategy = None):
         """Initializes the BaseEnv with scaling constraints and core attributes.
 
         Args:
-            name (str): The unique name of the environment.
-            num_apps (int): The number of managed deployments.
-            k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
+            config_path (str): 
             reward_strategy (RewardStrategy): The reward objective function.
-            waiting_period (int): Seconds to wait after a scaling (real K8s only).
-
         """
         super().__init__()
 
-        self.name = name
-        self.num_apps = num_apps
-        self.deployments_names = deployments
-        self.k8s = k8s
-        self.reward_strategy = reward_strategy
-        self.waiting_period = waiting_period
-        self.__version__ = "0.0.1"
+        self._cfg = self._load_config(config_path)
+        env_cfg = self._cfg["env"]
+        self._deployment_cfgs = self._cfg["deployments"]
 
-        self.min_pods = 1
-        self.max_pods = 8
+        self.k8s = env_cfg["k8s"]
+        self.name = env_cfg["name"]
+        self.num_apps = len(self._deployment_cfgs)
+        self.deployments_names = [d["name"] for d in self._deployment_cfgs]
+        self.deployment_list = build_deployment_list(self._deployment_cfgs, self.k8s)
+        self.reward_strategy = reward_strategy
+        self.waiting_period = env_cfg["waiting_period"]
+        self.__version__ = "0.0.1"
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
 
+        self.max_steps = env_cfg["max_steps"]
         self.current_step = 0
         self.episode_count = 0
         self.terminated = False
@@ -131,19 +132,47 @@ class BaseEnv(gym.Env):
         self.time_start = 0
         self.execution_time = 0
 
-        self.deployment_list = []
-        self.action_space = spaces.MultiDiscrete([num_apps, self.num_actions])
+        self.action_space = spaces.MultiDiscrete([self.num_apps, self.num_actions])
         self.observation_space = None
 
         # TODO: MODIFY THIS
         # self.obs_file = f"{self.name}_observations.csv"
+        self.file_results = "results.csv"
 
-        self.df = None
+        if not self.k8s:
+            self.load_dataset()
+            self.traffic = self.simulation_traffic(env_cfg["target_deployment"])
+
+    @staticmethod
+    def _load_config(config_path: str) -> dict:
+        """Reads and parses the YAML configuration file from the specified path.
+
+        Args:
+            config_path (str): The filesystem path to the YAML configuration file.
+
+        Returns:
+            dict: The parsed configuration data as a dictionary.
+        
+        Raises:
+            FileNotFoundError: If the configuration file does not exist at the provided path.
+        """
+        path = Path(config_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+        with open(path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+
+        return cfg
 
     def load_dataset(self):
         """Loads the simulation dataframe using deployment metadata.
-        
-        This must be called AFTER self.deployment_list is initialized in the child class.
+
+        This method enables the environment to simulate cluster behavior using
+        real-world observation data when not connected to a live K8s cluster.
+
+        Raises:
+            FileNotFoundError: If the observation CSV is missing from the expected
+                data directory.
         """
         if not self.k8s:
             # Get namespace from the first deployment in the list
@@ -229,14 +258,13 @@ class BaseEnv(gym.Env):
         self.info = {}
         self.action_stats = [0 for _ in range(self.num_actions)]
 
-        # Note: self.deployment_list should be reinitialized in the child
-        # after calling super().reset()
+        self.deployment_list = build_deployment_list(self._deployment_cfgs, self.k8s)
 
         # Note: Child class will implement the actual return.
         # This is a structural placeholder
         return np.array([], dtype=np.float32), self.info
 
-    def render(self, mode='human', close=False):
+    def render(self, mode='human', close=False) -> None:
         """Renders the environment state."""
         return
 
@@ -267,7 +295,7 @@ class BaseEnv(gym.Env):
         reward = self.get_reward
 
         self.total_reward += reward
-        self.avg_pods.append(get_num_pods(self.deployment_list))
+        self.avg_pods.append(sum(d.num_pods for d in self.deployment_list))
         # TODO replace 0 with target_id (the target deployment)
         self.avg_latency.append(self.deployment_list[0].metrics["latency"])
 
@@ -287,7 +315,7 @@ class BaseEnv(gym.Env):
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
 
-        if self.current_step == MAX_STEPS:
+        if self.current_step == self.max_steps:
             self.episode_count += 1
             self.execution_time = time.time() - self.time_start
             save_to_csv(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),

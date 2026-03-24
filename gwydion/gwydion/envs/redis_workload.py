@@ -1,7 +1,9 @@
 import math
 
 from gwydion.envs import workload
+from gwydion.envs.workload_registry import register
 
+@register("redis")
 class RedisWorkload(workload.BaseDeploymentWorkload):
     """Concrete workload implementation for Redis gym environment.
     

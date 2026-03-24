@@ -4,9 +4,6 @@ import numpy as np
 from gymnasium import spaces
 
 from gwydion.envs import base
-from gwydion.envs.deployment import get_redis_deployment_list
-
-MAX_STEPS = 25  # MAX Number of steps per episode
 
 # Possible Actions (Discrete)
 ACTION_DO_NOTHING = 0
@@ -29,40 +26,21 @@ ID_MASTER = 0
 
 class Redis(base.BaseEnv):
     """Horizontal Scaling for Redis in K8s - an Gymansium gym environment."""
-    def __init__(self, k8s=False, reward_strategy=None, waiting_period=5):
-        super().__init__(
-            name="redis_gym",
-            num_apps=2,
-            deployments=["redis-leader", "redis-follower"],
-            k8s=k8s,
-            reward_strategy=reward_strategy,
-            waiting_period=waiting_period
-        )
-
-        self.deployment_list = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.observation_space = self.get_observation_space()
 
-        # TODO remove this
-        self.file_results = "results.csv"
-
-        if not k8s:
-            self.load_dataset()
-            # TODO: replace with target deployment
-            self.traffic = self.simulation_traffic("redis-leader")
-
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed, options=options)
-
-        self.deployment_list = get_redis_deployment_list(self.k8s, self.min_pods, self.max_pods)
 
         return self.get_state(), self.info
 
     def take_action(self, action, id):
         self.current_step += 1
 
-        # Stop if MAX_STEPS
-        if self.current_step == MAX_STEPS:
+        # Stop if self.max_steps
+        if self.current_step == self.max_steps:
             # logging.info('[Take Action] MAX STEPS achieved, ending ...')
             self.none_counter = 0
             self.episode_over = True
@@ -136,12 +114,12 @@ class Redis(base.BaseEnv):
     def get_observation_space(self):
         return spaces.Box(
             low=np.array([
-                self.min_pods, # Number of pods -- leader
+                self.deployment_list[0].min_pods, # Number of pods -- leader
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
                 # 0, # CPU forecast (in m)
                 # 0, # MEM forecast (in MiB)
-                self.min_pods, # Number of pods -- follower
+                self.deployment_list[1].min_pods, # Number of pods -- follower
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
                 # 0, # CPU forecast (in m)
@@ -149,12 +127,12 @@ class Redis(base.BaseEnv):
                 0, # None counter
             ]),
             high=np.array([
-                self.max_pods, # Number of pods -- leader
+                self.deployment_list[0].max_pods, # Number of pods -- leader
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
                 # 1000, # CPU forecast (in m)
                 # 1000, # MEM forecast (in MiB)
-                self.max_pods, # Number of pods -- follower
+                self.deployment_list[1].max_pods, # Number of pods -- follower
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
                 # 1000, # CPU forecast (in m)

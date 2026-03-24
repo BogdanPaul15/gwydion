@@ -28,7 +28,7 @@ class BaseDeploymentWorkload(ABC):
         desired_replicas (int): Target number of replicas calculated by the workload.
         metrics (dict): Dictionary storing metrics.
     """
-    def __init__(self, k8s, name, namespace, min_pods, max_pods, sleep_time=0.2):
+    def __init__(self, k8s, name, namespace, min_pods, max_pods, sleep_time=0.2, **kwargs):
         """Initializes the BaseDeploymentWorkload with deployment configs.
         
         Args:
@@ -55,7 +55,7 @@ class BaseDeploymentWorkload(ABC):
 
         self.metrics = {}
 
-        if k8s:
+        if self.k8s:
             self._initialize_k8s_client()
             self._refresh_pods()
 
@@ -82,6 +82,44 @@ class BaseDeploymentWorkload(ABC):
                                                                          namespace=self.namespace)
         self.num_previous_pods = self.num_pods
         self.num_pods = self.deployment_object.spec.replicas
+
+    @classmethod
+    def from_config(cls, cfg: dict, k8s: bool):
+        """Factory method to instantiate a workload from a configuration dictionary.
+
+        This method acts as a mapper between the nested YAML configuration structure
+        and the class constructor. It flattens the dictionary into specific parameters 
+        for pod boundaries, resource requests/limits, and scaling objectives.
+
+        Args:
+            cfg (dict): The configuration dictionary for a single deployment.
+            k8s (bool): If True, the workload will attempt to connect
+                to a live Kubernetes cluster via the API.
+
+        Returns:
+            BaseDeploymentWorkload: A fully initialized instance of the workload 
+                subclass (e.g., RedisWorkload, OnlineBoutiqueWorkload).
+        """
+        pods_cfg = cfg["pods"]
+        res_cfg = cfg["resources"]
+        scaling_cfg = cfg["scaling"]
+
+        return cls(
+            k8s=k8s,
+            name=cfg["name"],
+            namespace=cfg["namespace"],
+            min_pods=pods_cfg["min"],
+            max_pods=pods_cfg["max"],
+
+            cpu_request=res_cfg["requests"]["cpu"],
+            cpu_limit=res_cfg["limits"]["cpu"],
+            mem_request=res_cfg["requests"]["mem"],
+            mem_limit=res_cfg["limits"]["mem"],
+
+            cpu_weight=scaling_cfg["cpu_weight"],
+            mem_weight=scaling_cfg["mem_weight"],
+            threshold=scaling_cfg["threshold"],
+        )
 
     def update_obs_k8s(self):
         """The main observation cycle: fetching K8s objects, fetching metrics,
