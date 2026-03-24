@@ -166,16 +166,16 @@ class Redis(base.BaseEnv):
 
     def get_state(self):
         ob = (
-            self.deploymentList[0].num_pods, # Number of pods -- leader
-            self.deploymentList[0].metrics["cpu_usage"], #  CPU Usage (in m)
-            self.deploymentList[0].metrics["mem_usage"], # MEM Usage (in MiB)
-            # self.deploymentList[0].cpu_forecast, # CPU forecast (in m)
-            # self.deploymentList[0].mem_forecast, # MEM forecast (in MiB)
-            self.deploymentList[1].num_pods, # Number of pods -- follower
-            self.deploymentList[1].metrics["cpu_usage"], #  CPU Usage (in m)
-            self.deploymentList[1].metrics["mem_usage"], # MEM Usage (in MiB)
-            # self.deploymentList[1].cpu_forecast, # CPU forecast (in m)
-            # self.deploymentList[1].mem_forecast, # MEM forecast (in MiB)
+            self.deployment_list[0].num_pods, # Number of pods -- leader
+            self.deployment_list[0].metrics["cpu_usage"], #  CPU Usage (in m)
+            self.deployment_list[0].metrics["mem_usage"], # MEM Usage (in MiB)
+            # self.deployment_list[0].cpu_forecast, # CPU forecast (in m)
+            # self.deployment_list[0].mem_forecast, # MEM forecast (in MiB)
+            self.deployment_list[1].num_pods, # Number of pods -- follower
+            self.deployment_list[1].metrics["cpu_usage"], #  CPU Usage (in m)
+            self.deployment_list[1].metrics["mem_usage"], # MEM Usage (in MiB)
+            # self.deployment_list[1].cpu_forecast, # CPU forecast (in m)
+            # self.deployment_list[1].mem_forecast, # MEM forecast (in MiB)
         )
 
         # return self.normalize(ob)
