@@ -13,29 +13,10 @@ from gymnasium import spaces
 
 from gwydion.envs.rewards import RewardStrategy
 from gwydion.envs.workload_registry import build_deployment_list
+from gwydion.envs.action_registry import build_action_set
 from gwydion.envs.util import save_to_csv
 
-ACTION_MOVES_COUNT = 15
-
-ID_DEPLOYMENTS = 0
-ID_MOVES = 1
-
 ACTION_DO_NOTHING = 0
-ACTION_ADD_1_REPLICA = 1
-ACTION_ADD_2_REPLICA = 2
-ACTION_ADD_3_REPLICA = 3
-ACTION_ADD_4_REPLICA = 4
-ACTION_ADD_5_REPLICA = 5
-ACTION_ADD_6_REPLICA = 6
-ACTION_ADD_7_REPLICA = 7
-ACTION_TERMINATE_1_REPLICA = 8
-ACTION_TERMINATE_2_REPLICA = 9
-ACTION_TERMINATE_3_REPLICA = 10
-ACTION_TERMINATE_4_REPLICA = 11
-ACTION_TERMINATE_5_REPLICA = 12
-ACTION_TERMINATE_6_REPLICA = 13
-ACTION_TERMINATE_7_REPLICA = 14
-
 
 class BaseEnv(gym.Env):
     """Abstract Base Class for Kubernetes Horizontal Scaling Environments.
@@ -51,8 +32,8 @@ class BaseEnv(gym.Env):
         name (str): The unique name of the environment.
         num_apps (int): The number of managed deployments.
         deployments_names (list[str]): Names of the K8s deployments.
-        deployment_list (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects representing
-            the current state and metrics for each active K8s deployment.
+        deployment_list (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects 
+            representing the current state and metrics for each active K8s deployment.
         reward_strategy (RewardStrategy): The reward objective function.
         waiting_period (int): Seconds to wait after a scaling action (real K8s only).
         constraint_min_pod_replicas (bool): Flag set to True if a scaling action 
@@ -67,7 +48,6 @@ class BaseEnv(gym.Env):
         episode_over (bool): Flag for reaching max steps (truncated).
         total_reward (float): Accumulated reward for the current episode.
         info (dict): A dictionary containing auxiliary information complementing observation.
-        num_actions (int): Total count of possible scaling actions.
         none_counter (int): Count of "Do Nothing" consecutive actions in the current episode.
         action_stats (List[int]): List containing counters for each possible action taken in the
             current episode. The index corresponds to the action ID.
@@ -79,6 +59,8 @@ class BaseEnv(gym.Env):
             at each step of the current episode (e.g., index 0 corresponds to the first step).
         time_start (float): The timestamp (in seconds) representing when the episode started.
         execution_time (float): Total duration (in seconds) taken to complete the current episode.
+        _actions (List[Action]): The set of available scaling commands built from config.
+        num_actions (int): Total count of possible scaling actions.
         action_space (gym.spaces.MultiDiscrete): A 2-dimensional action vector where the first
             element selects which deployment to scale (0 to num_apps - 1) and the second element
             defines the scaling action to perform (0 to num_actions - 1).
@@ -99,6 +81,7 @@ class BaseEnv(gym.Env):
 
         self._cfg = self._load_config(config_path)
         env_cfg = self._cfg["env"]
+        actions_cfg = self._cfg["env"]["actions"]
         self._deployment_cfgs = self._cfg["deployments"]
 
         self.k8s = env_cfg["k8s"]
@@ -108,7 +91,7 @@ class BaseEnv(gym.Env):
         self.deployment_list = build_deployment_list(self._deployment_cfgs, self.k8s)
         self.reward_strategy = reward_strategy
         self.waiting_period = env_cfg["waiting_period"]
-        self.__version__ = "0.0.1"
+        self.__version__ = env_cfg["version"]
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
@@ -121,10 +104,7 @@ class BaseEnv(gym.Env):
         self.total_reward = 0
         self.info = {}
 
-        # TODO: replace 
-        self.num_actions = ACTION_MOVES_COUNT
         self.none_counter = 0
-        self.action_stats = [0 for _ in range(self.num_actions)]
         self.traffic = []
 
         self.avg_pods = []
@@ -132,7 +112,10 @@ class BaseEnv(gym.Env):
         self.time_start = 0
         self.execution_time = 0
 
+        self._actions = build_action_set(actions_cfg)
+        self.num_actions = len(self._actions)
         self.action_space = spaces.MultiDiscrete([self.num_apps, self.num_actions])
+        self.action_stats = [0 for _ in range(self.num_actions)]
         self.observation_space = None
 
         # TODO: MODIFY THIS
@@ -190,7 +173,7 @@ class BaseEnv(gym.Env):
         """Normalizes the observation vector using the high bounds of the space.
         
         Note:
-            TODO: Normalization can be added with a Gymnasium wrapper.
+            TODO: Normalization can be done with a Gymnasium wrapper.
             Reference: https://gymnasium.farama.org/api/wrappers/observation_wrappers/#gymnasium.wrappers.NormalizeObservation
 
         Args:
@@ -241,8 +224,8 @@ class BaseEnv(gym.Env):
         """
         super().reset(seed=seed)
 
-        # TODO: self.none_counter should be added here as well
         self.current_step = 0
+        self.none_counter = 0
         self.total_reward = 0
 
         self.terminated = False
@@ -273,7 +256,7 @@ class BaseEnv(gym.Env):
         return
 
     def step(self, action):
-        app_id, move_id = action
+        deployment_id, action_id = action
 
         if self.current_step == 1:
             if not self.k8s:
@@ -281,10 +264,10 @@ class BaseEnv(gym.Env):
 
             self.time_start = time.time()
 
-        self.take_action(move_id, app_id)
+        self.take_action(action_id, deployment_id)
 
         if self.k8s:
-            if action[ID_MOVES] != ACTION_DO_NOTHING and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
+            if action_id != ACTION_DO_NOTHING and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
                 time.sleep(self.waiting_period)
 
             for d in self.deployment_list:
@@ -377,12 +360,28 @@ class BaseEnv(gym.Env):
 
         return
 
+    def take_action(self, deployment_id: int, action: int) -> None:
+        """TODO
+
+        TODO
+
+        Args:
+            deployment_id (int): The index of the deployment to be scaled.
+            action (int): The index of the action in the _actions list.
+        """
+        self.current_step += 1
+
+        if self.current_step == self.max_steps:
+            self.episode_over = True
+
+        self.action_stats[action] += 1
+        selected = self._actions[action]
+
+        selected.execute(self, deployment_id)
+
     @property
     def get_reward(self):
         return self.reward_strategy.get_reward(self)
-
-    def take_action(self, action, id):
-        raise NotImplementedError
 
     def get_state(self):
         raise NotImplementedError

@@ -4,23 +4,6 @@ import numpy as np
 from gymnasium import spaces
 from gwydion.envs import base
 
-# Possible Actions (Discrete)
-ACTION_DO_NOTHING = 0
-ACTION_ADD_1_REPLICA = 1
-ACTION_ADD_2_REPLICA = 2
-ACTION_ADD_3_REPLICA = 3
-ACTION_ADD_4_REPLICA = 4
-ACTION_ADD_5_REPLICA = 5
-ACTION_ADD_6_REPLICA = 6
-ACTION_ADD_7_REPLICA = 7
-ACTION_TERMINATE_1_REPLICA = 8
-ACTION_TERMINATE_2_REPLICA = 9
-ACTION_TERMINATE_3_REPLICA = 10
-ACTION_TERMINATE_4_REPLICA = 11
-ACTION_TERMINATE_5_REPLICA = 12
-ACTION_TERMINATE_6_REPLICA = 13
-ACTION_TERMINATE_7_REPLICA = 14
-
 ID_recommendation = 0
 ID_product_catalog = 1
 ID_cart_service = 2
@@ -44,78 +27,6 @@ class OnlineBoutique(base.BaseEnv):
         super().reset(seed=seed, options=options)
 
         return self.get_state(), self.info
-
-    def take_action(self, action, id):
-        self.current_step += 1
-
-        # Stop if self.max_steps
-        if self.current_step == self.max_steps:
-            print('[Take Action] MAX STEPS achieved, ending ...')
-            self.episode_over = True
-
-        # ACTIONS
-        if action == ACTION_DO_NOTHING:
-            self.none_counter += 1
-            print("[Take Action] SELECTED ACTION: DO NOTHING ...")
-
-        elif action == ACTION_ADD_1_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
-            self.deployment_list[id].deploy_pod_replicas(1, self)
-
-        elif action == ACTION_ADD_2_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 2 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(2, self)
-
-        elif action == ACTION_ADD_3_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 3 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(3, self)
-
-        elif action == ACTION_ADD_4_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 4 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(4, self)
-
-        elif action == ACTION_ADD_5_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 5 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(5, self)
-
-        elif action == ACTION_ADD_6_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 6 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(6, self)
-
-        elif action == ACTION_ADD_7_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 7 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(7, self)
-
-        elif action == ACTION_TERMINATE_1_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 1 Replica ...")
-            self.deployment_list[id].terminate_pod_replicas(1, self)
-
-        elif action == ACTION_TERMINATE_2_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 2 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(2, self)
-
-        elif action == ACTION_TERMINATE_3_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 3 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(3, self)
-
-        elif action == ACTION_TERMINATE_4_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 4 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(4, self)
-
-        elif action == ACTION_TERMINATE_5_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 5 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(5, self)
-
-        elif action == ACTION_TERMINATE_6_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 6 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(6, self)
-
-        elif action == ACTION_TERMINATE_7_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 7 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(7, self)
-
-        else:
-            print('[Take Action] Unrecognized Action: ' + str(action))
 
     def get_observation_space(self):
         return spaces.Box(
