@@ -69,7 +69,7 @@ class CostStrategy(RewardStrategy):
     def calculate(self, env):
         reward = sum(1 for d in env.deployment_list if d.num_pods == d.desired_replicas)
 
-        if reward != len(env.num_apps) and env.none_counter > 2:
+        if reward != env.num_apps and env.none_counter > 2:
             reward = -env.none_counter
         return reward
 
@@ -93,7 +93,11 @@ class LatencyStrategy(RewardStrategy):
         self.threshold = threshold
 
     def calculate(self, env):
+<<<<<<< HEAD
         latency = float(env.deployment_list[self.target_id].latency)
+=======
+        latency = float(env.deploymentList[self.target_id].metrics["latency"])
+>>>>>>> 1ce298f (fix: solve reward bugs)
 
         reward = -min(latency, self.threshold)
 
