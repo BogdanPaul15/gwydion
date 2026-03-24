@@ -75,7 +75,11 @@ class BaseEnv(gym.Env):
             at each step of the current episode (e.g., index 0 corresponds to the first step).
         time_start (float): The timestamp (in seconds) representing when the episode started.
         execution_time (float): Total duration (in seconds) taken to complete the current episode.
+<<<<<<< HEAD
         deployment_list (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects representing
+=======
+        deploymentList (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects representing
+>>>>>>> 6da6a5e (refactor: modify environments to accept new deployment workload)
             the current state and metrics for each active K8s deployment.
         action_space (gym.spaces.MultiDiscrete): A 2-dimensional action vector where the first
             element selects which deployment to scale (0 to num_apps - 1) and the second element
@@ -97,7 +101,7 @@ class BaseEnv(gym.Env):
             waiting_period (int): Seconds to wait after a scaling (real K8s only).
 
         """
-        super(BaseEnv, self).__init__()
+        super().__init__()
 
         self.name = name
         self.num_apps = num_apps
@@ -269,7 +273,11 @@ class BaseEnv(gym.Env):
         self.total_reward += reward
         self.avg_pods.append(get_num_pods(self.deployment_list))
         # TODO replace 0 with target_id (the target deployment)
+<<<<<<< HEAD
         self.avg_latency.append(self.deployment_list[0].metrics["latency"])
+=======
+        self.avg_latency.append(self.deploymentList[0].metrics["latency"])
+>>>>>>> 6da6a5e (refactor: modify environments to accept new deployment workload)
 
         self.info = {
             "reward": f"{self.total_reward:.2f}",
@@ -282,7 +290,11 @@ class BaseEnv(gym.Env):
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # TODO: should be called before normalizing the observations
         # TODO: replace 0 with target_id (the target deployment)
+<<<<<<< HEAD
         self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deployment_list[0].metrics["latency"])
+=======
+        self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deploymentList[0].metrics["latency"])
+>>>>>>> 6da6a5e (refactor: modify environments to accept new deployment workload)
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
@@ -338,6 +350,7 @@ class BaseEnv(gym.Env):
             sample = data.sample()
 
         for i, name in enumerate(self.deployments_names):
+<<<<<<< HEAD
             self.deployment_list[i].metrics["cpu_usage"] = int(sample[f"{name}_cpu_usage"].values[0])
             self.deployment_list[i].metrics["mem_usage"] = int(sample[f"{name}_mem_usage"].values[0])
             self.deployment_list[i].metrics["received_traffic"] = int(sample[f"{name}_traffic_in"].values[0])
@@ -345,16 +358,25 @@ class BaseEnv(gym.Env):
             self.deployment_list[i].metrics["latency"] = float(f"{sample[f'{name}_latency'].values[0]:.3f}")
 
         for d in self.deployment_list:
+=======
+            self.deploymentList[i].metrics["cpu_usage"] = int(sample[f"{name}_cpu_usage"].values[0])
+            self.deploymentList[i].metrics["mem_usage"] = int(sample[f"{name}_mem_usage"].values[0])
+            self.deploymentList[i].metrics["received_traffic"] = int(sample[f"{name}_traffic_in"].values[0])
+            self.deploymentList[i].metrics["transmit_traffic"] = int(sample[f"{name}_traffic_out"].values[0])
+            self.deploymentList[i].metrics["latency"] = float(f"{sample[f'{name}_latency'].values[0]:.3f}")
+
+        for d in self.deploymentList:
+>>>>>>> 6da6a5e (refactor: modify environments to accept new deployment workload)
             d.update_desired_replicas()
 
         return
 
-    def take_action(self, action, id):
-        raise NotImplementedError
-
     @property
     def get_reward(self):
         return self.reward_strategy.get_reward(self)
+
+    def take_action(self, action, id):
+        raise NotImplementedError
 
     def get_state(self):
         raise NotImplementedError
