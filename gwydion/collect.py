@@ -4,7 +4,7 @@ from statistics import mean
 
 import matplotlib
 
-from gwydion.gwydion.envs.deployment import get_online_boutique_deployment_list, get_redis_deployment_list
+from gwydion.gwydion.envs.old_deployment import get_online_boutique_deployment_list, get_redis_deployment_list
 from gwydion.gwydion.envs.util import save_to_csv, get_num_pods
 
 matplotlib.use('TkAgg')

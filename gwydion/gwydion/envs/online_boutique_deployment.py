@@ -1,14 +1,14 @@
 import math
 
-from gwydion.envs import workload
-from gwydion.envs.workload_registry import register
+from gwydion.gwydion.envs import deployment
+from gwydion.gwydion.envs.deployment_registry import register
 
-@register("redis")
-class RedisWorkload(workload.BaseDeploymentWorkload):
-    """Concrete workload implementation for Redis gym environment.
-    
+@register("online_boutique")
+class OnlineBoutiqueDeployment(deployment.Deployment):
+    """Concrete deployment implementation for Online Boutique gym environment.
+
     Scales based on a weighted CPU and MEM usage, Network I/O,
-    and by tracking Redis specific latency.
+    and by tracking cart specific latency.
     """
     def __init__(self, k8s, name, namespace, min_pods, max_pods,
                  cpu_request, cpu_limit, mem_request, mem_limit,
@@ -37,9 +37,13 @@ class RedisWorkload(workload.BaseDeploymentWorkload):
 
         # TODO: maybe this part can be aggregated into one query for each metric
         for pod in self.pod_names:
+            # f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}'}}[5m]))"
             query_cpu = f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
+            # f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}'}}[5m]))""
             query_mem = f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
+            # f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}'}}[5m]))"
             query_rec = f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
+            # f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}'}}[5m]))"
             query_trans = f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
 
             res_cpu = self.fetch_prom(query_cpu)
@@ -58,26 +62,17 @@ class RedisWorkload(workload.BaseDeploymentWorkload):
             if res_trans:
                 self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
 
-        # TODO: should not be hardcoded (replace with target deployment)
-        if self.name == "redis-leader":
-            query_dur = "sum(irate(redis_commands_duration_seconds_total[5m]))"
-            query_proc = "sum(irate(redis_commands_processed_total[5m]))"
+        # TODO: should not be hardcoded
+        if self.name == "recommendationservice":
+            query_get_cart = "locust_requests_avg_response_time{method='GET', name='/cart'}"
 
-            redis_duration = 0
-            redis_processed = 0
+            get_cart = 0
 
-            res_dur = self.fetch_prom(query_dur)
-            if res_dur:
-                redis_duration = float(res_dur[0]["value"][1]) * 1000
+            res_get_cart = self.fetch_prom(query_get_cart)
+            if res_get_cart:
+                get_cart = float(res_get_cart[0]["value"][1])
 
-            res_proc = self.fetch_prom(query_proc)
-            if res_proc:
-                redis_processed = float(res_proc[0]["value"][1])
-
-            if redis_processed != 0:
-                self.metrics["latency"] = float(f"{redis_duration / redis_processed:.3f}")
-            else:
-                self.metrics["latency"] = float(f"{redis_duration:.3f}")
+            self.metrics["latency"] = float(f"{get_cart:.3f}")
 
     def update_desired_replicas(self):
         cpu_target_usage = self.num_pods * self.cpu_target

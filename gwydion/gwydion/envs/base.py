@@ -12,7 +12,7 @@ import gymnasium as gym
 from gymnasium import spaces
 
 from gwydion.envs.rewards import RewardStrategy
-from gwydion.envs.workload_registry import build_deployment_list
+from gwydion.gwydion.envs.deployment_registry import build_deployment_list
 from gwydion.envs.action_registry import build_action_set
 from gwydion.envs.util import save_to_csv
 
@@ -32,7 +32,7 @@ class BaseEnv(gym.Env):
         name (str): The unique name of the environment.
         num_apps (int): The number of managed deployments.
         deployments_names (list[str]): Names of the K8s deployments.
-        deployment_list (List[BaseDeploymentWorkload]): A list of BaseDeploymentWorkload objects 
+        deployment_list (List[Deployment]): A list of Deployment objects 
             representing the current state and metrics for each active K8s deployment.
         reward_strategy (RewardStrategy): The reward objective function.
         waiting_period (int): Seconds to wait after a scaling action (real K8s only).
