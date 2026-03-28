@@ -1,19 +1,19 @@
 import math
 
-from gwydion.envs import workload
-from gwydion.envs.workload_registry import register
+from .deployment import Deployment
+from .deployment_registry import register
 
 @register("online_boutique")
-class OnlineBoutiqueWorkload(workload.BaseDeploymentWorkload):
-    """Concrete workload implementation for Online Boutique gym environment.
+class OnlineBoutiqueDeployment(Deployment):
+    """Concrete deployment implementation for Online Boutique gym environment.
 
     Scales based on a weighted CPU and MEM usage, Network I/O,
     and by tracking cart specific latency.
     """
     def __init__(self, k8s, name, namespace, min_pods, max_pods,
                  cpu_request, cpu_limit, mem_request, mem_limit,
-                 cpu_weight=0.7, mem_weight=0.3, threshold=0.75, sleep_time=0.2):
-        super().__init__(k8s, name, namespace, min_pods, max_pods, sleep_time)
+                 cpu_weight=0.7, mem_weight=0.3, threshold=0.75):
+        super().__init__(k8s, name, namespace, min_pods, max_pods)
 
         self.cpu_request = cpu_request
         self.mem_request = mem_request
@@ -28,7 +28,18 @@ class OnlineBoutiqueWorkload(workload.BaseDeploymentWorkload):
         self.cpu_weight = cpu_weight
         self.mem_weight = mem_weight
 
-    def collect_metrics(self):
+        self.initialize_metrics()
+
+    def initialize_metrics(self) -> None:
+        self.metrics = {
+            "cpu_usage": 0,
+            "mem_usage": 0,
+            "received_traffic": 0,
+            "transmit_traffic": 0,
+            "latency": 0.0,
+        }
+
+    def collect_metrics(self) -> None:
         self.metrics["cpu_usage"] = 0
         self.metrics["mem_usage"] = 0
         self.metrics["received_traffic"] = 0
@@ -74,7 +85,7 @@ class OnlineBoutiqueWorkload(workload.BaseDeploymentWorkload):
 
             self.metrics["latency"] = float(f"{get_cart:.3f}")
 
-    def update_desired_replicas(self):
+    def update_desired_replicas(self) -> None:
         cpu_target_usage = self.num_pods * self.cpu_target
         mem_target_usage = self.num_pods * self.mem_target
 

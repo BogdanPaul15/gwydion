@@ -11,7 +11,7 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 from datetime import datetime
 
-from gwydion.envs.deployment import get_max_cpu, get_max_mem, get_max_traffic, get_redis_deployment_list
+from gwydion.gwydion.envs.old_deployment import get_max_cpu, get_max_mem, get_max_traffic, get_redis_deployment_list
 from gwydion.envs.util import save_to_csv, get_cost_reward, get_latency_reward_redis, get_num_pods
 
 # MIN and MAX Replication

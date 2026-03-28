@@ -1,39 +1,23 @@
 import csv
+import os
 
 import numpy as np
 from gymnasium import spaces
-from gwydion.envs import base
+from gwydion.envs import BaseEnv
 
-# Possible Actions (Discrete)
-ACTION_DO_NOTHING = 0
-ACTION_ADD_1_REPLICA = 1
-ACTION_ADD_2_REPLICA = 2
-ACTION_ADD_3_REPLICA = 3
-ACTION_ADD_4_REPLICA = 4
-ACTION_ADD_5_REPLICA = 5
-ACTION_ADD_6_REPLICA = 6
-ACTION_ADD_7_REPLICA = 7
-ACTION_TERMINATE_1_REPLICA = 8
-ACTION_TERMINATE_2_REPLICA = 9
-ACTION_TERMINATE_3_REPLICA = 10
-ACTION_TERMINATE_4_REPLICA = 11
-ACTION_TERMINATE_5_REPLICA = 12
-ACTION_TERMINATE_6_REPLICA = 13
-ACTION_TERMINATE_7_REPLICA = 14
+ID_RECOMMENDATION = 0
+ID_PRODUCT_CATALOG = 1
+ID_CART_SERVICE = 2
+ID_AD_SERVICE = 3
+ID_PAYMENT_SERVICE = 4
+ID_SHIPPING_SERVICE = 5
+ID_CURRENCY_SERVICE = 6
+ID_REDIS_CART = 7
+ID_CHECKOUT_SERVICE = 8
+ID_FRONTEND = 9
+ID_EMAIL = 10
 
-ID_recommendation = 0
-ID_product_catalog = 1
-ID_cart_service = 2
-ID_ad_service = 3
-ID_payment_service = 4
-ID_shipping_service = 5
-ID_currency_service = 6
-ID_redis_cart = 7
-ID_checkout_service = 8
-ID_frontend = 9
-ID_email = 10
-
-class OnlineBoutique(base.BaseEnv):
+class OnlineBoutique(BaseEnv):
     """Horizontal Scaling for Online Boutique in K8s - an Gymnasium gym environment."""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -45,147 +29,75 @@ class OnlineBoutique(base.BaseEnv):
 
         return self.get_state(), self.info
 
-    def take_action(self, action, id):
-        self.current_step += 1
-
-        # Stop if self.max_steps
-        if self.current_step == self.max_steps:
-            print('[Take Action] MAX STEPS achieved, ending ...')
-            self.episode_over = True
-
-        # ACTIONS
-        if action == ACTION_DO_NOTHING:
-            self.none_counter += 1
-            print("[Take Action] SELECTED ACTION: DO NOTHING ...")
-
-        elif action == ACTION_ADD_1_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 1 Replica ...")
-            self.deployment_list[id].deploy_pod_replicas(1, self)
-
-        elif action == ACTION_ADD_2_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 2 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(2, self)
-
-        elif action == ACTION_ADD_3_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 3 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(3, self)
-
-        elif action == ACTION_ADD_4_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 4 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(4, self)
-
-        elif action == ACTION_ADD_5_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 5 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(5, self)
-
-        elif action == ACTION_ADD_6_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 6 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(6, self)
-
-        elif action == ACTION_ADD_7_REPLICA:
-            print("[Take Action] SELECTED ACTION: ADD 7 Replicas ...")
-            self.deployment_list[id].deploy_pod_replicas(7, self)
-
-        elif action == ACTION_TERMINATE_1_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 1 Replica ...")
-            self.deployment_list[id].terminate_pod_replicas(1, self)
-
-        elif action == ACTION_TERMINATE_2_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 2 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(2, self)
-
-        elif action == ACTION_TERMINATE_3_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 3 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(3, self)
-
-        elif action == ACTION_TERMINATE_4_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 4 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(4, self)
-
-        elif action == ACTION_TERMINATE_5_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 5 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(5, self)
-
-        elif action == ACTION_TERMINATE_6_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 6 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(6, self)
-
-        elif action == ACTION_TERMINATE_7_REPLICA:
-            print("[Take Action] SELECTED ACTION: TERMINATE 7 Replicas ...")
-            self.deployment_list[id].terminate_pod_replicas(7, self)
-
-        else:
-            print('[Take Action] Unrecognized Action: ' + str(action))
-
     def get_observation_space(self):
         return spaces.Box(
             low=np.array([
-                self.deployment_list[0].min_pods,  # Number of Pods  -- 1) recommendationservice
+                self.deployment_list[ID_RECOMMENDATION].min_pods,  # Number of Pods  -- 1) recommendationservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[1].min_pods,  # Number of Pods -- 2) productcatalogservice
+                self.deployment_list[ID_PRODUCT_CATALOG].min_pods,  # Number of Pods -- 2) productcatalogservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[2].min_pods,  # Number of Pods -- 3) cartservice
+                self.deployment_list[ID_CART_SERVICE].min_pods,  # Number of Pods -- 3) cartservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[3].min_pods,  # Number of Pods -- 4) adservice
+                self.deployment_list[ID_AD_SERVICE].min_pods,  # Number of Pods -- 4) adservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[4].min_pods,  # Number of Pods -- 5) paymentservice
+                self.deployment_list[ID_PAYMENT_SERVICE].min_pods,  # Number of Pods -- 5) paymentservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[5].min_pods,  # Number of Pods -- 6) shippingservice
+                self.deployment_list[ID_SHIPPING_SERVICE].min_pods,  # Number of Pods -- 6) shippingservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[6].min_pods,  # Number of Pods -- 7) currencyservice
+                self.deployment_list[ID_CURRENCY_SERVICE].min_pods,  # Number of Pods -- 7) currencyservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[7].min_pods,  # Number of Pods -- 8) redis-cart
+                self.deployment_list[ID_REDIS_CART].min_pods,  # Number of Pods -- 8) redis-cart
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[8].min_pods,  # Number of Pods -- 9) checkoutservice
+                self.deployment_list[ID_CHECKOUT_SERVICE].min_pods,  # Number of Pods -- 9) checkoutservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[9].min_pods,  # Number of Pods -- 10) frontend
+                self.deployment_list[ID_FRONTEND].min_pods,  # Number of Pods -- 10) frontend
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
-                self.deployment_list[10].min_pods,  # Number of Pods -- 11) emailservice
+                self.deployment_list[ID_EMAIL].min_pods,  # Number of Pods -- 11) emailservice
                 0,  # CPU Usage (in m)
                 0,  # MEM Usage (in MiB)
                 0,  # None Counter
             ]), high=np.array([
-                self.deployment_list[0].max_pods,  # Number of Pods -- 1)
+                self.deployment_list[ID_RECOMMENDATION].max_pods,  # Number of Pods -- 1)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[1].max_pods,  # Number of Pods -- 2)
+                self.deployment_list[ID_PRODUCT_CATALOG].max_pods,  # Number of Pods -- 2)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[2].max_pods,  # Number of Pods -- 3)
+                self.deployment_list[ID_CART_SERVICE].max_pods,  # Number of Pods -- 3)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[3].max_pods,  # Number of Pods -- 4)
+                self.deployment_list[ID_AD_SERVICE].max_pods,  # Number of Pods -- 4)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[4].max_pods,  # Number of Pods -- 5)
+                self.deployment_list[ID_PAYMENT_SERVICE].max_pods,  # Number of Pods -- 5)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[5].max_pods,  # Number of Pods -- 6)
+                self.deployment_list[ID_SHIPPING_SERVICE].max_pods,  # Number of Pods -- 6)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[6].max_pods,  # Number of Pods -- 7)
+                self.deployment_list[ID_CURRENCY_SERVICE].max_pods,  # Number of Pods -- 7)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[7].max_pods,  # Number of Pods -- 8)
+                self.deployment_list[ID_REDIS_CART].max_pods,  # Number of Pods -- 8)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[8].max_pods,  # Number of Pods -- 9)
+                self.deployment_list[ID_CHECKOUT_SERVICE].max_pods,  # Number of Pods -- 9)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[9].max_pods,  # Number of Pods -- 10)
+                self.deployment_list[ID_FRONTEND].max_pods,  # Number of Pods -- 10)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
-                self.deployment_list[10].max_pods,  # Number of Pods -- 11)
+                self.deployment_list[ID_EMAIL].max_pods,  # Number of Pods -- 11)
                 1000,  # CPU Usage (in m)
                 1000,  # MEM Usage (in MiB)
                 10,      # None counter
@@ -195,39 +107,39 @@ class OnlineBoutique(base.BaseEnv):
 
     def get_state(self):
         ob = (
-            self.deployment_list[ID_recommendation].num_pods,
-            self.deployment_list[ID_recommendation].metrics["cpu_usage"],
-            self.deployment_list[ID_recommendation].metrics["mem_usage"],
-            self.deployment_list[ID_product_catalog].num_pods,
-            self.deployment_list[ID_product_catalog].metrics["cpu_usage"],
-            self.deployment_list[ID_product_catalog].metrics["mem_usage"],
-            self.deployment_list[ID_cart_service].num_pods,
-            self.deployment_list[ID_cart_service].metrics["cpu_usage"],
-            self.deployment_list[ID_cart_service].metrics["mem_usage"],
-            self.deployment_list[ID_ad_service].num_pods,
-            self.deployment_list[ID_ad_service].metrics["cpu_usage"],
-            self.deployment_list[ID_ad_service].metrics["mem_usage"],
-            self.deployment_list[ID_payment_service].num_pods,
-            self.deployment_list[ID_payment_service].metrics["cpu_usage"],
-            self.deployment_list[ID_payment_service].metrics["mem_usage"],
-            self.deployment_list[ID_shipping_service].num_pods,
-            self.deployment_list[ID_shipping_service].metrics["cpu_usage"],
-            self.deployment_list[ID_shipping_service].metrics["mem_usage"],
-            self.deployment_list[ID_currency_service].num_pods,
-            self.deployment_list[ID_currency_service].metrics["cpu_usage"],
-            self.deployment_list[ID_currency_service].metrics["mem_usage"],
-            self.deployment_list[ID_redis_cart].num_pods,
-            self.deployment_list[ID_redis_cart].metrics["cpu_usage"],
-            self.deployment_list[ID_redis_cart].metrics["mem_usage"],
-            self.deployment_list[ID_checkout_service].num_pods,
-            self.deployment_list[ID_checkout_service].metrics["cpu_usage"],
-            self.deployment_list[ID_checkout_service].metrics["mem_usage"],
-            self.deployment_list[ID_frontend].num_pods,
-            self.deployment_list[ID_frontend].metrics["cpu_usage"],
-            self.deployment_list[ID_frontend].metrics["mem_usage"],
-            self.deployment_list[ID_email].num_pods,
-            self.deployment_list[ID_email].metrics["cpu_usage"],
-            self.deployment_list[ID_email].metrics["mem_usage"],
+            self.deployment_list[ID_RECOMMENDATION].num_pods,
+            self.deployment_list[ID_RECOMMENDATION].metrics["cpu_usage"],
+            self.deployment_list[ID_RECOMMENDATION].metrics["mem_usage"],
+            self.deployment_list[ID_PRODUCT_CATALOG].num_pods,
+            self.deployment_list[ID_PRODUCT_CATALOG].metrics["cpu_usage"],
+            self.deployment_list[ID_PRODUCT_CATALOG].metrics["mem_usage"],
+            self.deployment_list[ID_CART_SERVICE].num_pods,
+            self.deployment_list[ID_CART_SERVICE].metrics["cpu_usage"],
+            self.deployment_list[ID_CART_SERVICE].metrics["mem_usage"],
+            self.deployment_list[ID_AD_SERVICE].num_pods,
+            self.deployment_list[ID_AD_SERVICE].metrics["cpu_usage"],
+            self.deployment_list[ID_AD_SERVICE].metrics["mem_usage"],
+            self.deployment_list[ID_PAYMENT_SERVICE].num_pods,
+            self.deployment_list[ID_PAYMENT_SERVICE].metrics["cpu_usage"],
+            self.deployment_list[ID_PAYMENT_SERVICE].metrics["mem_usage"],
+            self.deployment_list[ID_SHIPPING_SERVICE].num_pods,
+            self.deployment_list[ID_SHIPPING_SERVICE].metrics["cpu_usage"],
+            self.deployment_list[ID_SHIPPING_SERVICE].metrics["mem_usage"],
+            self.deployment_list[ID_CURRENCY_SERVICE].num_pods,
+            self.deployment_list[ID_CURRENCY_SERVICE].metrics["cpu_usage"],
+            self.deployment_list[ID_CURRENCY_SERVICE].metrics["mem_usage"],
+            self.deployment_list[ID_REDIS_CART].num_pods,
+            self.deployment_list[ID_REDIS_CART].metrics["cpu_usage"],
+            self.deployment_list[ID_REDIS_CART].metrics["mem_usage"],
+            self.deployment_list[ID_CHECKOUT_SERVICE].num_pods,
+            self.deployment_list[ID_CHECKOUT_SERVICE].metrics["cpu_usage"],
+            self.deployment_list[ID_CHECKOUT_SERVICE].metrics["mem_usage"],
+            self.deployment_list[ID_FRONTEND].num_pods,
+            self.deployment_list[ID_FRONTEND].metrics["cpu_usage"],
+            self.deployment_list[ID_FRONTEND].metrics["mem_usage"],
+            self.deployment_list[ID_EMAIL].num_pods,
+            self.deployment_list[ID_EMAIL].metrics["cpu_usage"],
+            self.deployment_list[ID_EMAIL].metrics["mem_usage"],
             self.none_counter,
         )
 
@@ -235,53 +147,32 @@ class OnlineBoutique(base.BaseEnv):
         return ob
 
     def save_obs_to_csv(self, obs_file, obs, date, latency):
-        file = open(obs_file, 'a+', encoding='utf-8', newline='')
-        fields = []
-        with file:
-            fields.append('date')
-            for d in self.deployment_list:
-                fields.append(d.name + '_num_pods')
-                fields.append(d.name + '_cpu_usage')
-                fields.append(d.name + '_mem_usage')
+        file_exists = os.path.isfile(obs_file)
 
-            writer = csv.DictWriter(file, fieldnames=fields)
-            # TODO this writes an independent header for each row
-            # writer.writeheader()
-            writer.writerow(
-                {'date': date,
-                 'recommendationservice_num_pods': int(f"{obs[0]}"),
-                 'recommendationservice_cpu_usage': int(f"{obs[1]}"),
-                 'recommendationservice_mem_usage': int(f"{obs[2]}"),
-                 'recommendationservice_latency': float(f"{latency:.3f}"),
-                 'productcatalogservice_num_pods': int(f"{obs[3]}"),
-                 'productcatalogservice_cpu_usage': int(f"{obs[4]}"),
-                 'productcatalogservice_mem_usage': int(f"{obs[5]}"),
-                 'cartservice_num_pods': int(f"{obs[6]}"),
-                 'cartservice_cpu_usage': int(f"{obs[7]}"),
-                 'cartservice_mem_usage': int(f"{obs[8]}"),
-                 'adservice_num_pods': int(f"{obs[9]}"),
-                 'adservice_cpu_usage': int(f"{obs[10]}"),
-                 'adservice_mem_usage': int(f"{obs[11]}"),
-                 'paymentservice_num_pods': int(f"{obs[12]}"),
-                 'paymentservice_cpu_usage': int(f"{obs[13]}"),
-                 'paymentservice_mem_usage': int(f"{obs[14]}"),
-                 'shippingservice_num_pods': int(f"{obs[15]}"),
-                 'shippingservice_cpu_usage': int(f"{obs[16]}"),
-                 'shippingservice_mem_usage': int(f"{obs[17]}"),
-                 'currencyservice_num_pods': int(f"{obs[18]}"),
-                 'currencyservice_cpu_usage': int(f"{obs[19]}"),
-                 'currencyservice_mem_usage': int(f"{obs[20]}"),
-                 'redis-cart_num_pods': int(f"{obs[21]}"),
-                 'redis-cart_cpu_usage': int(f"{obs[22]}"),
-                 'redis-cart_mem_usage': int(f"{obs[23]}"),
-                 'checkoutservice_num_pods': int(f"{obs[24]}"),
-                 'checkoutservice_cpu_usage': int(f"{obs[25]}"),
-                 'checkoutservice_mem_usage': int(f"{obs[26]}"),
-                 'frontend_num_pods': int(f"{obs[27]}"),
-                 'frontend_cpu_usage': int(f"{obs[28]}"),
-                 'frontend_mem_usage': int(f"{obs[29]}"),
-                 'emailservice_num_pods': int(f"{obs[30]}"),
-                 'emailservice_cpu_usage': int(f"{obs[31]}"),
-                 'emailservice_mem_usage': int(f"{obs[32]}"),
-                 }
-            )
+        with open(obs_file, "a+", encoding="utf-8", newline="") as f:
+            fields = ["date"]
+            for d in self.deployment_list:
+                fields.extend([
+                    f"{d.name}_num_pods",
+                    f"{d.name}_cpu_usage",
+                    f"{d.name}_mem_usage",
+                ])
+            fields.append("recommendationservice_latency")
+
+            writer = csv.DictWriter(f, fieldnames=fields)
+
+            if not file_exists:
+                writer.writeheader()
+
+            row_data = {
+                "date": date,
+                "recommendationservice_latency": float(f"{latency:.3f}")
+            }
+
+            for i, d in enumerate(self.deployment_list):
+                idx = i * 3
+                row_data[f"{d.name}_num_pods"] = int(f"{obs[idx]}")
+                row_data[f"{d.name}_cpu_usage"] = int(f"{obs[idx + 1]}")
+                row_data[f"{d.name}_mem_usage"] = int(f"{obs[idx + 2]}")
+
+            writer.writerow(row_data)
