@@ -22,8 +22,6 @@ env:
       replicas: 6
     - type: scale_up
       replicas: 7
-    - type: scale_up
-      replicas: 8
     - type: scale_down
       replicas: 1
     - type: scale_down
@@ -38,8 +36,6 @@ env:
       replicas: 6
     - type: scale_down
       replicas: 7
-    - type: scale_down
-      replicas: 8
 
 deployments:
   - name: redis-leader

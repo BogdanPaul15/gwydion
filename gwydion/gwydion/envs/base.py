@@ -118,8 +118,8 @@ class BaseEnv(gym.Env):
         self.action_stats = [0 for _ in range(self.num_actions)]
         self.observation_space = None
 
-        # TODO: MODIFY THIS
-        # self.obs_file = f"{self.name}_observations.csv"
+        # TODO: modify the path where obs and results file are saved
+        self.obs_file = f"{self.name}_observations.csv"
         self.file_results = "results.csv"
 
         if not self.k8s:
@@ -283,7 +283,7 @@ class BaseEnv(gym.Env):
 
             self.time_start = time.time()
 
-        self.take_action(action_id, deployment_id)
+        self.take_action(deployment_id, action_id)
 
         if self.k8s:
             if action_id != ACTION_DO_NOTHING and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
@@ -312,7 +312,7 @@ class BaseEnv(gym.Env):
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # TODO: should be called before normalizing the observations
         # TODO: replace 0 with target_id (the target deployment)
-        self.save_obs_to_csv(f"{self.name}_observation.csv", np.array(ob), date, self.deployment_list[0].metrics["latency"])
+        self.save_obs_to_csv(self.obs_file, np.array(ob), date, self.deployment_list[0].metrics["latency"])
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
