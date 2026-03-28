@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Action(ABC):
     """Abstract Base Class for deployment scaling actions.
@@ -30,10 +33,12 @@ class DoNothing(Action):
 
     def execute(self, env, _deployment_id: int) -> None:
         env.none_counter += 1
+        logger.debug("[Step: %d] | Action: %s | Counter: %d",
+                    env.current_step, self.label, env.none_counter)
 
     @property
     def label(self) -> str:
-        return "DO_NOTHING"
+        return "Do Nothing"
 
 @dataclass
 class ScaleUp(Action):
@@ -45,13 +50,20 @@ class ScaleUp(Action):
     replicas: int
 
     def execute(self, env, deployment_id: int) -> None:
-        constraint = env.deployment_list[deployment_id].deploy_pod_replicas(self.replicas)
+        deployment = env.deployment_list[deployment_id]
+        constraint = deployment.deploy_pod_replicas(self.replicas)
+
         if constraint:
             env.constraint_max_pod_replicas = True
+            logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
+                        env.current_step, self.label, deployment.name, deployment.max_pods)
+        else:
+            logger.debug("[Step: %d] | Action: %s for %s | Pods: %d",
+                        env.current_step, self.label, deployment.name, deployment.num_pods)
 
     @property
     def label(self) -> str:
-        return f"SCALE_UP_{self.replicas}"
+        return f"Scale Up {self.replicas}"
 
 @dataclass
 class ScaleDown(Action):
@@ -63,10 +75,17 @@ class ScaleDown(Action):
     replicas: int
 
     def execute(self, env, deployment_id: int) -> None:
-        constraint = env.deployment_list[deployment_id].terminate_pod_replicas(self.replicas)
+        deployment = env.deployment_list[deployment_id]
+        constraint = deployment.terminate_pod_replicas(self.replicas)
+
         if constraint:
             env.constraint_min_pod_replicas = True
+            logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
+                        env.current_step, self.label, deployment.name, deployment.min_pods)
+        else:
+            logger.debug("[Step: %d] | Action: %s for %s | Pods: %d",
+                        env.current_step, self.label, deployment.name, deployment.num_pods)
 
     @property
     def label(self) -> str:
-        return f"SCALE_DOWN_{self.replicas}"
+        return f"Scale Down {self.replicas}"
