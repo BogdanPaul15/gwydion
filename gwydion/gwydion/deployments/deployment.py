@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Self
+import logging
 
 import requests
 
@@ -11,6 +12,8 @@ from gwydion.envs.util import backoff
 TOKEN = ""
 HOST = ""
 PROMETHEUS_URL = ""
+
+logger = logging.getLogger(__name__)
 
 class Deployment(ABC):
     """Abstract base class for Kubernetes deployments.
@@ -83,6 +86,9 @@ class Deployment(ABC):
         self.num_previous_pods = self.num_pods
         self.num_pods = self.deployment_object.spec.replicas
 
+        logger.debug("Refreshed %s | Pods: %d -> %d", self.name, self.num_previous_pods,
+                      self.num_pods)
+
     @classmethod
     def from_config(cls, cfg: dict, k8s: bool) -> Self:
         """Factory method to instantiate a deployment from a configuration dictionary.
@@ -150,9 +156,12 @@ class Deployment(ABC):
             kubernetes.client.exceptions.ApiException: If the patch request fails after
               all retries.
         """
+        logger.debug("Patching %s | Current replicas: %d | Target replicas: %d",
+                      self.name, self.num_previous_pods, self.deployment_object.spec.replicas)
         self.apps_v1.patch_namespaced_deployment(
             name=self.name, namespace=self.namespace, body=self.deployment_object
         )
+        logger.debug("Patch successful for %s", self.name)
 
     @backoff(delay=0.5, retries=3, exceptions=(requests.exceptions.RequestException,))
     def fetch_prom(self, query: str) -> list:
@@ -175,6 +184,8 @@ class Deployment(ABC):
         )
 
         if response.json()["status"] != "success":
+            logger.error("Prometheus query failed for %s: %s", self.name, 
+                         response.json().get("error", ""))
             raise RuntimeError(f"Prometheus error: {response.json()['status']} \
                                - {response.json().get('error', '')}")
         return response.json()["data"]["result"]

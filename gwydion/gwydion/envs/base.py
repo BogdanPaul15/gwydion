@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from datetime import datetime
 from statistics import mean
+import logging
 import yaml
 
 import numpy as np
@@ -15,6 +16,8 @@ from gwydion.rewards import RewardStrategy
 from gwydion.deployments import build_deployment_list
 from gwydion.actions import build_action_set
 from .util import save_episode_stats
+
+logger = logging.getLogger(__name__)
 
 ACTION_DO_NOTHING = 0
 
@@ -126,6 +129,14 @@ class BaseEnv(gym.Env):
             self._load_dataset()
             self.traffic = self.simulation_traffic(env_cfg["target_deployment"])
 
+        logger.info("Environment: %s | Mode: %s | Strategy: %s | Steps per episode: %d",
+            self.name, "K8s" if self.k8s else "Simulation",
+            self.reward_strategy.__class__.__name__, self.max_steps)
+
+        for d in self.deployment_list:
+            logger.info("  Deployment: %s | Namespace: %s | Pods: [%d, %d]",
+                        d.name, d.namespace, d.min_pods, d.max_pods)
+
     @staticmethod
     def _load_config(config_path: str) -> dict:
         """Reads and parses the YAML configuration file from the specified path.
@@ -162,14 +173,14 @@ class BaseEnv(gym.Env):
             namespace = self.deployment_list[0].namespace
             base_dir = Path(__file__).resolve().parents[2]
             path = base_dir / "datasets" / "real" / namespace / "v1" / f"{self.name}_observation.csv"
-            print(path)
+            logger.debug("Loading dataset from %s", path)
 
             try:
                 self.df = pd.read_csv(path)
-                # logging.info(f"[Base] Dataset loaded from {path}")
-            except FileNotFoundError:
-                print("ERROR")
-                # logging.error(f"[Base] Could not find dataset at {path}")
+                logger.info("Dataset loaded: %s | Rows: %d", path.name, len(self.df))
+            except FileNotFoundError as e:
+                logger.error("Dataset not found at %s: %s", path, e, exc_info=True)
+                raise
 
     def normalize(self, obs: np.ndarray) -> np.ndarray:
         """Normalizes the observation vector using the high bounds of the space.
@@ -301,6 +312,10 @@ class BaseEnv(gym.Env):
         # TODO replace 0 with target_id (the target deployment)
         self.avg_latency.append(self.deployment_list[0].metrics["latency"])
 
+        logger.debug("[Step: %d] | Reward: %-6.2f | Total: %.2f | Avg Pods: %.2f",
+             self.current_step, reward, self.total_reward,
+             mean(self.avg_pods) if self.avg_pods else 0.0)
+
         self.info = {
             "reward": f"{self.total_reward:.2f}",
             'avg_pods': f"{mean(self.avg_pods):.3f}",
@@ -322,6 +337,13 @@ class BaseEnv(gym.Env):
             self.execution_time = time.time() - self.time_start
             save_episode_stats(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),
                         self.total_reward, self.execution_time)
+            logger.info("="*100)
+            logger.info("EPISODE END: %d | Steps: %d | Reward: %.2f | Avg Pods: %.2f | Avg Latency: %.3f | Time: %.2fs",
+                        self.episode_count, self.current_step, self.total_reward,
+                        mean(self.avg_pods) if self.avg_pods else 0.0,
+                        mean(self.avg_latency) if self.avg_latency else 0.0,
+                        self.execution_time)
+            logger.info("="*100)
 
         return np.array(ob), reward, self.terminated, self.episode_over, self.info
 
