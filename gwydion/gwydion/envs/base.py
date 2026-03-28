@@ -200,11 +200,11 @@ class BaseEnv(gym.Env):
         column = f"{deployment}_traffic_in"
         if self.df is not None and column in self.df.columns:
             seen = set()
-            self.traffic = [
+            return [
                 traffic_value for traffic_value in self.df[column]
                 if not (traffic_value in seen or seen.add(traffic_value))
             ]
-        return self.traffic
+        return []
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> tuple[np.ndarray, dict]:
         """Resets the environment to an initial state and returns an initial observation.

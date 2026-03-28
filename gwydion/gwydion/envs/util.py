@@ -1,13 +1,12 @@
 from typing import Callable, Type, Tuple, Any
 import csv
-import os
+from pathlib import Path
 import time
 import functools
 
-
 def save_episode_stats(path: str, episode: int, avg_pods: float, avg_latency: float, reward: float, execution_time: float) -> None:
     """TODO"""
-    file_exists = os.path.isfile(path)
+    file_exists = Path(path).exists()
 
     with open(path, "a+", encoding="utf-8",newline="") as f:
         fields = ["episode", "avg_pods", "avg_latency", "reward", "execution_time"]

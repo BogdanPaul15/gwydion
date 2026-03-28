@@ -1,5 +1,5 @@
 import csv
-import os
+from pathlib import Path
 
 import numpy as np
 from gymnasium import spaces
@@ -22,14 +22,15 @@ class Redis(BaseEnv):
         return self.get_state(), self.info
 
     def get_observation_space(self):
+        leader, follower = self.deployment_list[ID_REDIS_LEADER], self.deployment_list[ID_REDIS_FOLLOWER]
         return spaces.Box(
             low=np.array([
-                self.deployment_list[ID_REDIS_LEADER].min_pods, # Number of pods -- leader
+                leader.min_pods, # Number of pods -- leader
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
                 # 0, # CPU forecast (in m)
                 # 0, # MEM forecast (in MiB)
-                self.deployment_list[ID_REDIS_FOLLOWER].min_pods, # Number of pods -- follower
+                follower.min_pods, # Number of pods -- follower
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
                 # 0, # CPU forecast (in m)
@@ -37,12 +38,12 @@ class Redis(BaseEnv):
                 0, # None counter
             ]),
             high=np.array([
-                self.deployment_list[ID_REDIS_LEADER].max_pods, # Number of pods -- leader
+                leader.max_pods, # Number of pods -- leader
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
                 # 1000, # CPU forecast (in m)
                 # 1000, # MEM forecast (in MiB)
-                self.deployment_list[ID_REDIS_FOLLOWER].max_pods, # Number of pods -- follower
+                follower.max_pods, # Number of pods -- follower
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
                 # 1000, # CPU forecast (in m)
@@ -52,25 +53,25 @@ class Redis(BaseEnv):
             dtype=np.float32
         )
 
-    def get_state(self):
-        ob = (
-            self.deployment_list[ID_REDIS_LEADER].num_pods, # Number of pods -- leader
-            self.deployment_list[ID_REDIS_LEADER].metrics["cpu_usage"], #  CPU Usage (in m)
-            self.deployment_list[ID_REDIS_LEADER].metrics["mem_usage"], # MEM Usage (in MiB)
-            # self.deployment_list[0].cpu_forecast, # CPU forecast (in m)
-            # self.deployment_list[0].mem_forecast, # MEM forecast (in MiB)
-            self.deployment_list[ID_REDIS_FOLLOWER].num_pods, # Number of pods -- follower
-            self.deployment_list[ID_REDIS_FOLLOWER].metrics["cpu_usage"], #  CPU Usage (in m)
-            self.deployment_list[ID_REDIS_FOLLOWER].metrics["mem_usage"], # MEM Usage (in MiB)
-            # self.deployment_list[1].cpu_forecast, # CPU forecast (in m)
-            # self.deployment_list[1].mem_forecast, # MEM forecast (in MiB)
-        )
-
+    def get_state(self) -> np.ndarray:
+        leader, follower = self.deployment_list[ID_REDIS_LEADER], self.deployment_list[ID_REDIS_FOLLOWER]
         # return self.normalize(ob)
-        return ob
+        return np.array([
+            leader.num_pods,
+            leader.metrics["cpu_usage"],
+            leader.metrics["mem_usage"],
+            # leader.cpu_forecast, # CPU forecast (in m)
+            # leader.mem_forecast, # MEM forecast (in MiB)
+            follower.num_pods,
+            follower.metrics["cpu_usage"],
+            follower.metrics["mem_usage"],
+            # follower.cpu_forecast, # CPU forecast (in m)
+            # follower.mem_forecast, # MEM forecast (in MiB)
+            self.none_counter,
+        ], dtype=np.float32)
 
     def save_obs_to_csv(self, obs_file, obs, date, latency):
-        file_exists = os.path.isfile(obs_file)
+        file_exists = Path(obs_file).exists()
 
         with open(obs_file, "a+", encoding="utf-8", newline="") as f:
             fields = ["date"]
@@ -94,8 +95,8 @@ class Redis(BaseEnv):
 
             for i, d in enumerate(self.deployment_list):
                 idx = i * 3
-                row_data[f"{d.name}_num_pods"] = int(f"{obs[idx]}")
-                row_data[f"{d.name}_cpu_usage"] = int(f"{obs[idx + 1]}")
-                row_data[f"{d.name}_mem_usage"] = int(f"{obs[idx + 2]}")
+                row_data[f"{d.name}_num_pods"] = int(obs[idx])
+                row_data[f"{d.name}_cpu_usage"] = int(obs[idx + 1])
+                row_data[f"{d.name}_mem_usage"] = int(obs[idx + 2])
 
             writer.writerow(row_data)
