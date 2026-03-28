@@ -1,7 +1,10 @@
 import math
+import logging
 
 from .deployment import Deployment
 from .deployment_registry import register
+
+logger = logging.getLogger(__name__)
 
 @register("redis")
 class RedisDeployment(Deployment):
@@ -56,18 +59,26 @@ class RedisDeployment(Deployment):
             res_cpu = self.fetch_prom(query_cpu)
             if res_cpu:
                 self.metrics["cpu_usage"] += int(float(res_cpu[0]["value"][1]) * 1000)
+            else:
+                logger.warning("No CPU data from Prometheus for pod %s", pod)
 
             res_mem = self.fetch_prom(query_mem)
             if res_mem:
                 self.metrics["mem_usage"] += int(float(res_mem[0]["value"][1]) / 1000000)
+            else:
+                logger.warning("No MEM data from Prometheus for pod %s", pod)
 
             res_rec = self.fetch_prom(query_rec)
             if res_rec:
                 self.metrics["received_traffic"] += int(float(res_rec[0]["value"][1]) / 1000)
+            else:
+                logger.warning("No receive traffic data from Prometheus for pod %s", pod)
 
             res_trans = self.fetch_prom(query_trans)
             if res_trans:
                 self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
+            else:
+                logger.warning("No transmit traffic data from Prometheus for pod %s", pod)
 
         # TODO: should not be hardcoded (replace with target deployment)
         if self.name == "redis-leader":
@@ -88,6 +99,8 @@ class RedisDeployment(Deployment):
             if redis_processed != 0:
                 self.metrics["latency"] = float(f"{redis_duration / redis_processed:.3f}")
             else:
+                logger.debug("redis_processed is 0 for %s, using raw duration as latency", 
+                             self.name)
                 self.metrics["latency"] = float(f"{redis_duration:.3f}")
 
     def update_desired_replicas(self) -> None:
