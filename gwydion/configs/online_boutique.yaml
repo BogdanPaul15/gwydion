@@ -1,5 +1,6 @@
 env:
   name: online_boutique_gym
+  version: 0.0.1
   k8s: False
   max_steps: 25
   waiting_period: 5

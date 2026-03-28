@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
+from typing import Self
 
-import time
 import requests
 
 import kubernetes
 from kubernetes import client
+
+from gwydion.envs.util import backoff
 
 TOKEN = ""
 HOST = ""
@@ -21,23 +23,22 @@ class Deployment(ABC):
         namespace (str): The Kubernetes namespace.
         min_pods (int): Minimum replica boundary.
         max_pods (int): Maximum replica boundary.
-        sleep_time (float, optional): Wait time (in seconds) for API retries.
         pod_names (List[str]): List of currently active pod names.
         num_previous_pods (int): Number of pods in the previous observation step.
         num_pods (int): Current number of pods.
         desired_replicas (int): Target number of replicas calculated by the deployment.
         metrics (dict): Dictionary storing metrics.
     """
-    def __init__(self, k8s, name, namespace, min_pods, max_pods, sleep_time=0.2, **kwargs):
-        """Initializes the Deployment with deployment configs.
+    def __init__(self, k8s: bool, name: str, namespace: str, min_pods: int,
+                  max_pods: int, **kwargs):
+        """Initializes the Deployment with deployment config.
         
         Args:
             k8s (bool): If True, interacts with a real K8s cluster. If False, runs simulation.
             name (str): Name of the deployment.
             namespace (str): Namespace name of the deployment.
-            min_pods (int): Minimum replica count allowed per deployment.
-            max_pods (int): Maximum replica count allowed per deployment.
-            sleep_time (float): Time (in seconds) between API retries.
+            min_pods (int): Minimum replica count allowed for deployment.
+            max_pods (int): Maximum replica count allowed for deployment.
         """
         self.k8s = k8s
         self.name = name
@@ -45,8 +46,6 @@ class Deployment(ABC):
 
         self.min_pods = min_pods
         self.max_pods = max_pods
-
-        self.sleep_time = sleep_time
 
         self.pod_names = []
         self.num_previous_pods = 1
@@ -56,10 +55,11 @@ class Deployment(ABC):
         self.metrics = {}
 
         if self.k8s:
+            self.deployment_object = None
             self._initialize_k8s_client()
             self._refresh_pods()
 
-    def _initialize_k8s_client(self):
+    def _initialize_k8s_client(self) -> None:
         """Sets up the Kubernetes API client."""
         self.config = client.Configuration()
         self.config.verify_ssl = False
@@ -69,7 +69,7 @@ class Deployment(ABC):
         self.v1 = client.CoreV1Api(self.client)
         self.apps_v1 = client.AppsV1Api(self.client)
 
-    def _refresh_pods(self):
+    def _refresh_pods(self) -> None:
         """Fetches the latest deployment state and pod names from K8s."""
         self.pod_names = []
         pods = self.v1.list_namespaced_pod(namespace=self.namespace,
@@ -84,7 +84,7 @@ class Deployment(ABC):
         self.num_pods = self.deployment_object.spec.replicas
 
     @classmethod
-    def from_config(cls, cfg: dict, k8s: bool):
+    def from_config(cls, cfg: dict, k8s: bool) -> Self:
         """Factory method to instantiate a deployment from a configuration dictionary.
 
         This method acts as a mapper between the nested YAML configuration structure
@@ -101,7 +101,7 @@ class Deployment(ABC):
                 subclass (e.g., RedisDeployment, OnlineBoutiqueDeployment).
         """
         pods_cfg = cfg["pods"]
-        res_cfg = cfg["resources"]
+        resources_cfg = cfg["resources"]
         scaling_cfg = cfg["scaling"]
 
         return cls(
@@ -111,25 +111,25 @@ class Deployment(ABC):
             min_pods=pods_cfg["min"],
             max_pods=pods_cfg["max"],
 
-            cpu_request=res_cfg["requests"]["cpu"],
-            cpu_limit=res_cfg["limits"]["cpu"],
-            mem_request=res_cfg["requests"]["mem"],
-            mem_limit=res_cfg["limits"]["mem"],
+            cpu_request=resources_cfg["requests"]["cpu"],
+            cpu_limit=resources_cfg["limits"]["cpu"],
+            mem_request=resources_cfg["requests"]["mem"],
+            mem_limit=resources_cfg["limits"]["mem"],
 
             cpu_weight=scaling_cfg["cpu_weight"],
             mem_weight=scaling_cfg["mem_weight"],
             threshold=scaling_cfg["threshold"],
         )
 
-    def update_obs_k8s(self):
-        """The main observation cycle: fetching K8s objects, fetching metrics,
+    def update_obs_k8s(self) -> None:
+        """The main observation cycle: fetching K8s objects, collecting metrics,
             and calculate desired replicas.
         """
         self._refresh_pods()
         self.collect_metrics()
         self.update_desired_replicas()
 
-    def update_deployment(self, new_replicas):
+    def update_deployment(self, new_replicas: int) -> None:
         """Prepares the deployment object for scaling and triggers the patch request.
 
         Args:
@@ -140,25 +140,22 @@ class Deployment(ABC):
         self.num_previous_pods = self.deployment_object.spec.replicas
         self.deployment_object.spec.replicas = new_replicas
 
-        self.patch_deployment(new_replicas)
+        self.patch_deployment()
 
-    def patch_deployment(self, new_replicas):
+    @backoff(delay=0.5, retries=3, exceptions=(kubernetes.client.exceptions.ApiException,))
+    def patch_deployment(self) -> None:
         """Executes the K8s API patch request to update the deployment scale.
-
-        Args:
-            new_replicas (int): The target number of pod replicas.
+        
+        Raises:
+            kubernetes.client.exceptions.ApiException: If the patch request fails after
+              all retries.
         """
-        try:
-            self.apps_v1.patch_namespaced_deployment(
-                name=self.name, namespace=self.namespace, body=self.deployment_object
-            )
-        except kubernetes.client.exceptions.ApiException as e:
-            print(e)
-            print(f"Retrying in {self.sleep_time}s...")
-            time.sleep(self.sleep_time)
-            return self.update_deployment(new_replicas)
+        self.apps_v1.patch_namespaced_deployment(
+            name=self.name, namespace=self.namespace, body=self.deployment_object
+        )
 
-    def fetch_prom(self, query):
+    @backoff(delay=0.5, retries=3, exceptions=(requests.exceptions.RequestException,))
+    def fetch_prom(self, query: str) -> list:
         """Queries the Prometheus API and returns resulting data payload.
 
         Args:
@@ -166,75 +163,75 @@ class Deployment(ABC):
 
         Returns:
             list: The result array from Prometheus JSON response.
+
+        Raises:
+            requests.exceptions.RequestException: If the request fails after all retries.
+            RuntimeError: If Prometheus returns a non-success status after retries.
         """
-        try:
-            response = requests.get(
-                PROMETHEUS_URL + "/api/v1/query",
-                params={"query": query},
-                timeout=5
-            )
-        except requests.exceptions.RequestException as e:
-            print(e)
-            print(f"Retrying in {self.sleep_time}s...")
-            time.sleep(self.sleep_time)
-            return self.fetch_prom(query)
+        response = requests.get(
+            PROMETHEUS_URL + "/api/v1/query",
+            params={"query": query},
+            timeout=5
+        )
 
         if response.json()["status"] != "success":
-            print(f"Error processing the request: {response.json()['status']}")
-            print(f"The Error is: {response.json()['error']}")
-            print(f"Retrying in {self.sleep_time}s...")
-            time.sleep(self.sleep_time)
-            return self.fetch_prom(query)
+            raise RuntimeError(f"Prometheus error: {response.json()['status']} \
+                               - {response.json().get('error', '')}")
+        return response.json()["data"]["result"]
 
-        result = response.json()["data"]["result"]
-        return result
+    def deploy_pod_replicas(self, num_replicas: int) -> bool:
+        """Attempts to scale-out the deployment by `num_replicas` pods.
 
-    def deploy_pod_replicas(self, n, env):
-        """Attempts to scale-out the deployment by `n` pods.
+        Args:
+            num_replicas (int): The number of pods to add.
+
+        Returns:
+            bool: True if the operation would exceed the maximum allowed pods (max_pods),
+                  False if scaling was successful and within limits.
+        """
+        new_total = self.num_pods + num_replicas
+
+        if new_total <= self.max_pods:
+            if self.k8s:
+                self.update_deployment(new_total)
+            else:
+                self.num_previous_pods = self.num_pods
+                self.num_pods = new_total
+            return False
+        return True
+
+    def terminate_pod_replicas(self, num_replicas: int) -> bool:
+        """Attempts to scale-in the deployment by `num_replicas` pods.
+
+        Args:
+            num_replicas (int): The number of pods to remove.
         
-        Args:
-            n (int): The number of pods to add.
-            env (BaseEnv): The Gymnasium environment instance.
+        Returns:
+            bool: True if the operation would fall below the minimum allowed pods (min_pods),
+                  False if scaling was successful and within limits.
         """
-        env.none_counter = 0
-        replicas = self.num_pods + n
+        new_total = self.num_pods - num_replicas
 
-        if replicas <= self.max_pods:
+        if new_total >= self.min_pods:
             if self.k8s:
-                self.update_deployment(replicas)
+                self.update_deployment(new_total)
             else:
                 self.num_previous_pods = self.num_pods
-                self.num_pods = replicas
-
-            return
-
-        env.constraint_max_pod_replicas = True
-
-    def terminate_pod_replicas(self, n, env):
-        """Attempts to scale-in the deployment by `n` pods.
-
-        Args:
-            n (int): The number of pods to remove.
-            env (BaseEnv): The Gymnasium environment instance.
-        """
-        env.none_counter = 0
-        replicas = self.num_pods - n
-
-        if replicas >= self.min_pods:
-            if self.k8s:
-                self.update_deployment(replicas)
-            else:
-                self.num_previous_pods = self.num_pods
-                self.num_pods = replicas
-
-            return
-
-        env.constraint_min_pod_replicas = True
+                self.num_pods = new_total
+            return False
+        return True
 
     @abstractmethod
-    def collect_metrics(self):
+    def initialize_metrics(self) -> None:
+        """Initializes the specific metrics required for Deployment state."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def collect_metrics(self) -> None:
         """Fetches custom metrics to evaluate deployment health."""
+        raise NotImplementedError
 
     @abstractmethod
-    def update_desired_replicas(self):
+    def update_desired_replicas(self) -> None:
         """Calculates the required number of replicas based on collected metrics."""
+        raise NotImplementedError

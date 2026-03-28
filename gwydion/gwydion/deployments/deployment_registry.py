@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Type
-from gwydion.gwydion.envs.deployment import Deployment
+from .deployment import Deployment
 
 _REGISTRY: dict[str, Type[Deployment]] = {}
 

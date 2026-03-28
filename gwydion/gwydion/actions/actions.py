@@ -28,7 +28,7 @@ class Action(ABC):
 class DoNothing(Action):
     """An action that maintains the current state without scaling."""
 
-    def execute(self, env, deployment_id: int) -> None:
+    def execute(self, env, _deployment_id: int) -> None:
         env.none_counter += 1
 
     @property
@@ -45,7 +45,9 @@ class ScaleUp(Action):
     replicas: int
 
     def execute(self, env, deployment_id: int) -> None:
-        env.deployment_list[deployment_id].deploy_pod_replicas(self.replicas, env)
+        constraint = env.deployment_list[deployment_id].deploy_pod_replicas(self.replicas)
+        if constraint:
+            env.constraint_max_pod_replicas = True
 
     @property
     def label(self) -> str:
@@ -61,7 +63,9 @@ class ScaleDown(Action):
     replicas: int
 
     def execute(self, env, deployment_id: int) -> None:
-        env.deployment_list[deployment_id].terminate_pod_replicas(self.replicas, env)
+        constraint = env.deployment_list[deployment_id].terminate_pod_replicas(self.replicas)
+        if constraint:
+            env.constraint_min_pod_replicas = True
 
     @property
     def label(self) -> str:

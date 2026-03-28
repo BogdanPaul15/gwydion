@@ -1,19 +1,19 @@
 import math
 
-from gwydion.gwydion.envs import deployment
-from gwydion.gwydion.envs.deployment_registry import register
+from .deployment import Deployment
+from .deployment_registry import register
 
-@register("online_boutique")
-class OnlineBoutiqueDeployment(deployment.Deployment):
-    """Concrete deployment implementation for Online Boutique gym environment.
-
+@register("redis")
+class RedisDeployment(Deployment):
+    """Concrete deployment implementation for Redis gym environment.
+    
     Scales based on a weighted CPU and MEM usage, Network I/O,
-    and by tracking cart specific latency.
+    and by tracking Redis specific latency.
     """
     def __init__(self, k8s, name, namespace, min_pods, max_pods,
                  cpu_request, cpu_limit, mem_request, mem_limit,
-                 cpu_weight=0.7, mem_weight=0.3, threshold=0.75, sleep_time=0.2):
-        super().__init__(k8s, name, namespace, min_pods, max_pods, sleep_time)
+                 cpu_weight=0.7, mem_weight=0.3, threshold=0.75):
+        super().__init__(k8s, name, namespace, min_pods, max_pods)
 
         self.cpu_request = cpu_request
         self.mem_request = mem_request
@@ -28,7 +28,18 @@ class OnlineBoutiqueDeployment(deployment.Deployment):
         self.cpu_weight = cpu_weight
         self.mem_weight = mem_weight
 
-    def collect_metrics(self):
+        self.initialize_metrics()
+
+    def initialize_metrics(self) -> None:
+        self.metrics = {
+            "cpu_usage": 0,
+            "mem_usage": 0,
+            "received_traffic": 0,
+            "transmit_traffic": 0,
+            "latency": 0.0,
+        }
+
+    def collect_metrics(self) -> None:
         self.metrics["cpu_usage"] = 0
         self.metrics["mem_usage"] = 0
         self.metrics["received_traffic"] = 0
@@ -37,13 +48,9 @@ class OnlineBoutiqueDeployment(deployment.Deployment):
 
         # TODO: maybe this part can be aggregated into one query for each metric
         for pod in self.pod_names:
-            # f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}'}}[5m]))"
             query_cpu = f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
-            # f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}'}}[5m]))""
             query_mem = f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
-            # f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}'}}[5m]))"
             query_rec = f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
-            # f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}'}}[5m]))"
             query_trans = f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
 
             res_cpu = self.fetch_prom(query_cpu)
@@ -62,19 +69,28 @@ class OnlineBoutiqueDeployment(deployment.Deployment):
             if res_trans:
                 self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
 
-        # TODO: should not be hardcoded
-        if self.name == "recommendationservice":
-            query_get_cart = "locust_requests_avg_response_time{method='GET', name='/cart'}"
+        # TODO: should not be hardcoded (replace with target deployment)
+        if self.name == "redis-leader":
+            query_dur = "sum(irate(redis_commands_duration_seconds_total[5m]))"
+            query_proc = "sum(irate(redis_commands_processed_total[5m]))"
 
-            get_cart = 0
+            redis_duration = 0
+            redis_processed = 0
 
-            res_get_cart = self.fetch_prom(query_get_cart)
-            if res_get_cart:
-                get_cart = float(res_get_cart[0]["value"][1])
+            res_dur = self.fetch_prom(query_dur)
+            if res_dur:
+                redis_duration = float(res_dur[0]["value"][1]) * 1000
 
-            self.metrics["latency"] = float(f"{get_cart:.3f}")
+            res_proc = self.fetch_prom(query_proc)
+            if res_proc:
+                redis_processed = float(res_proc[0]["value"][1])
 
-    def update_desired_replicas(self):
+            if redis_processed != 0:
+                self.metrics["latency"] = float(f"{redis_duration / redis_processed:.3f}")
+            else:
+                self.metrics["latency"] = float(f"{redis_duration:.3f}")
+
+    def update_desired_replicas(self) -> None:
         cpu_target_usage = self.num_pods * self.cpu_target
         mem_target_usage = self.num_pods * self.mem_target
 

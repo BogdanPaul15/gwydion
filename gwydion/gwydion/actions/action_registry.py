@@ -1,5 +1,5 @@
 from typing import List
-from gwydion.envs.actions import Action, DoNothing, ScaleUp, ScaleDown
+from .actions import Action, DoNothing, ScaleUp, ScaleDown
 
 _ACTION = {
     "do_nothing":    lambda _: DoNothing(),
@@ -22,11 +22,10 @@ def build_action_set(action_cfgs: list) -> List[Action]:
     Raises:
         ValueError: If an unknown action type is encountered in the config.
     """
-    actions = []
-    for cfg in action_cfgs:
+    def build(cfg):
         action_type = cfg["type"]
         builder = _ACTION.get(action_type)
         if builder is None:
             raise ValueError(f"Unknown action type: '{action_type}'")
-        actions.append(builder(cfg))
-    return actions
+        return builder(cfg)
+    return [build(cfg) for cfg in action_cfgs]
