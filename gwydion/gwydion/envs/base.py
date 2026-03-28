@@ -288,12 +288,6 @@ class BaseEnv(gym.Env):
         """
         deployment_id, action_id = action
 
-        if self.current_step == 1:
-            if not self.k8s:
-                self.simulation_update()
-
-            self.time_start = time.time()
-
         self.take_action(deployment_id, action_id)
 
         if self.k8s:
@@ -425,13 +419,14 @@ class BaseEnv(gym.Env):
         """
         self.current_step += 1
 
+        if self.current_step == 1:
+            self.time_start = time.time()
+
         if self.current_step == self.max_steps:
             self.episode_over = True
 
         self.action_stats[action] += 1
-        selected = self._actions[action]
-
-        selected.execute(self, deployment_id)
+        self._actions[action].execute(self, deployment_id)
 
     @property
     def reward(self):
