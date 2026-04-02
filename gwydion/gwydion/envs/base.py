@@ -127,7 +127,7 @@ class BaseEnv(gym.Env):
 
         if not self.k8s:
             self._load_dataset()
-            self.traffic = self.simulation_traffic(env_cfg["target_deployment"])
+            self.traffic = self.simulation_traffic(self.deployments_names[env_cfg["target_id"]])
 
         logger.info("Environment: %s | Mode: %s | Strategy: %s | Steps per episode: %d",
             self.name, "K8s" if self.k8s else "Simulation",
@@ -177,6 +177,8 @@ class BaseEnv(gym.Env):
 
             try:
                 self.df = pd.read_csv(path)
+                for name in self.deployments_names:
+                    self.df[f"diff-{name}"] = self.df[f"{name}_num_pods"].diff()
                 logger.info("Dataset loaded: %s | Rows: %d", path.name, len(self.df))
             except FileNotFoundError as e:
                 logger.error("Dataset not found at %s: %s", path, e, exc_info=True)
@@ -303,8 +305,7 @@ class BaseEnv(gym.Env):
 
         self.total_reward += reward
         self.avg_pods.append(sum(d.num_pods for d in self.deployment_list))
-        # TODO replace 0 with target_id (the target deployment)
-        self.avg_latency.append(self.deployment_list[0].metrics["latency"])
+        self.avg_latency.append(self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"])
 
         logger.debug("[Step: %d] | Reward: %-6.2f | Total: %.2f | Avg Pods: %.2f",
              self.current_step, reward, self.total_reward,
@@ -320,8 +321,7 @@ class BaseEnv(gym.Env):
         ob = self.get_state()
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # TODO: should be called before normalizing the observations
-        # TODO: replace 0 with target_id (the target deployment)
-        self.save_obs_to_csv(self.obs_file, np.array(ob), date, self.deployment_list[0].metrics["latency"])
+        self.save_obs_to_csv(self.obs_file, np.array(ob), date, self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"])
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
@@ -369,31 +369,31 @@ class BaseEnv(gym.Env):
                 self.deployment_list[i].num_previous_pods = int(sample[f"{name}_num_pods"].values[0])
 
         else:
-            pods = []
-            previous_pods = []
-            diff = []
+            pods = [d.num_pods for d in self.deployment_list]
+            diff = [d.num_pods - d.num_previous_pods for d in self.deployment_list]
             data = self.df
 
-            for i, name in enumerate(self.deployments_names):
-                pods.append(self.deployment_list[i].num_pods)
-                previous_pods.append(self.deployment_list[i].num_previous_pods)
-                aux = pods[i] - previous_pods[i]
-                diff.append(aux)
-                self.df[f"diff-{name}"] = self.df[f"{name}_num_pods"].diff()
-
             for i in range(self.num_apps):
-                data = data.loc[self.df[f"{self.deployments_names[i]}_num_pods"] == pods[i]]
-                data = data.loc[data[f"diff-{self.deployments_names[i]}"] == diff[i]]
+                name = self.deployments_names[i]
+
+                pod_match = data.loc[data[f"{name}_num_pods"] == pods[i]]
+                exact_match = pod_match.loc[pod_match[f"diff-{name}"] == diff[i]]
 
                 new_traffic = self.traffic.pop(0)
 
-                if data.size == 0:
-                    data = data.loc[self.df[f"{self.deployments_names[i]}_num_pods"] == pods[i]]
+                if exact_match.size == 0:
+                    logger.debug("[Step: %d] | No match for pods=%s diff=%s on %s, relaxing diff filter",
+                                 self.current_step, pods[i], diff[i], name)
+                    data = pod_match
+                else:
+                    data = exact_match
 
                 self.traffic.append(new_traffic)
 
                 if data.size == 0:
-                    data = self.df.loc[self.df[f"{self.deployments_names[i]}_num_pods"] == pods[i]]
+                    logger.warning("[Step: %d] | No pod match for %s (pods=%d). Sampling full dataset.",
+                           self.current_step, name, pods[i])
+                    data = self.df.loc[self.df[f"{name}_num_pods"] == pods[i]]
 
             sample = data.sample()
 
