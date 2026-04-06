@@ -4,7 +4,7 @@ env:
   k8s: False
   max_steps: 25
   waiting_period: 5
-  target_deployment: redis-leader
+  target_id: 0
 
   actions:
     - type: do_nothing
