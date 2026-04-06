@@ -93,7 +93,7 @@ class LatencyStrategy(RewardStrategy):
         self.threshold = threshold
 
     def calculate(self, env):
-        latency = float(env.deploymentList[self.target_id].metrics["latency"])
+        latency = float(env.deployment_list[self.target_id].metrics["latency"])
 
         reward = -min(latency, self.threshold)
 
