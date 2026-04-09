@@ -15,6 +15,7 @@ from gymnasium import spaces
 from gwydion.rewards import RewardStrategy
 from gwydion.deployments import build_deployment_list
 from gwydion.actions import build_action_set
+from gwydion.actions import build_action_space
 from .util import save_episode_stats
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,10 @@ class BaseEnv(gym.Env):
 
         self._actions = build_action_set(actions_cfg)
         self.num_actions = len(self._actions)
+        # TODO: add docstrings
+        space_type = env_cfg["action_space_type"]
+        self._action_adapter = build_action_space(space_type, self.num_apps, self.num_actions)
+        self._action_space = self._action_adapter.gym_space
         self.action_space = spaces.MultiDiscrete([self.num_apps, self.num_actions])
         self.action_stats = [0 for _ in range(self.num_actions)]
         self.observation_space = None
