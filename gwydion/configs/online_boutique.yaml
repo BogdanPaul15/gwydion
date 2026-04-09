@@ -6,6 +6,7 @@ env:
   waiting_period: 5
   target_id: 9
 
+  action_space_type: multi_discrete
   actions:
     - type: do_nothing
     - type: scale_up
