@@ -119,8 +119,7 @@ class BaseEnv(gym.Env):
         # TODO: add docstrings
         space_type = env_cfg["action_space_type"]
         self._action_adapter = build_action_space(space_type, self.num_apps, self.num_actions)
-        self._action_space = self._action_adapter.gym_space
-        self.action_space = spaces.MultiDiscrete([self.num_apps, self.num_actions])
+        self.action_space = self._action_adapter.gym_space
         self.action_stats = [0 for _ in range(self.num_actions)]
         self.observation_space = None
 
@@ -291,7 +290,7 @@ class BaseEnv(gym.Env):
                 episode_over (bool): Whether the episode has reached its maximum steps.
                 info (dict): Additional information about the step.
         """
-        deployment_id, action_id = action
+        deployment_id, action_id = self._action_adapter.decode(action)
 
         self.take_action(deployment_id, action_id)
 
