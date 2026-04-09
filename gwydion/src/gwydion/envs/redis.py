@@ -48,7 +48,7 @@ class Redis(BaseEnv):
                 1000, # MEM Usage (in MiB)
                 # 1000, # CPU forecast (in m)
                 # 1000, # MEM forecast (in MiB)
-                10, # None counter
+                25, # None counter
             ]),
             dtype=np.float32
         )

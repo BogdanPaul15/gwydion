@@ -68,7 +68,7 @@ class OnlineBoutique(BaseEnv):
                 checkoutservice.max_pods, 1000, 1000,
                 frontend.max_pods, 1000, 1000,
                 email.max_pods, 1000, 1000,
-                10,
+                25,
             ]),
             dtype=np.float32
         )
