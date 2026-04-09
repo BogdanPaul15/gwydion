@@ -9,6 +9,7 @@ from sb3_contrib import RecurrentPPO, MaskablePPO
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 from gwydion.envs import Redis, OnlineBoutique
+from gwydion.rewards import CostStrategy, LatencyStrategy
 from gwydion.utils import test_model
 from stable_baselines3.common.callbacks import CheckpointCallback
 
@@ -66,33 +67,39 @@ def get_load_model(alg, tensorboard_log, load_path):
 
 
 def get_env(use_case, k8s, goal):
-    envs = 0
+    env = 0
     if use_case == 'redis':
-        env = Redis(k8s=k8s, goal_reward=goal)
+        if goal == "cost":
+            env = Redis(config_path="configs/redis.yaml", reward_strategy=CostStrategy())
+        else:
+            env = Redis(config_path="configs/redis.yaml", reward_strategy=LatencyStrategy(target_id=0, threshold=250.0))
         # For faster training!
         # otherwise just comment the following lines
 
-        env.reset()
-        _, _, _, _, info = env.step([0, 0])
-        info_keywords = tuple(info.keys())
-        env = SubprocVecEnv([lambda: Redis(k8s=k8s, goal_reward=goal) for i in range(8)])
-        envs = VecMonitor(env, filename="vec_redis_gym_results_", info_keywords=info_keywords)
+        # env.reset()
+        # _, _, _, _, info = env.step([0, 0])
+        # info_keywords = tuple(info.keys())
+        # env = SubprocVecEnv([lambda: Redis(k8s=k8s, goal_reward=goal) for i in range(8)])
+        # envs = VecMonitor(env, filename="vec_redis_gym_results_", info_keywords=info_keywords)
 
     elif use_case == 'onlineboutique':
-        env = OnlineBoutique(k8s=k8s, goal_reward=goal)
+        if goal == "cost":
+            env = OnlineBoutique(config_path="configs/online_boutique.yaml", reward_strategy=CostStrategy())
+        else:
+            env = OnlineBoutique(config_path="configs/online_boutique.yaml", reward_strategy=LatencyStrategy(target_id=9, threshold=3000.0))
         # For faster training!
         # otherwise just comment the following lines
 
-        env.reset()
-        _, _, _, _, info = env.step([0, 0])
-        info_keywords = tuple(info.keys())
-        env = SubprocVecEnv([lambda: OnlineBoutique(k8s=k8s, goal_reward=goal) for i in range(8)])
-        envs = VecMonitor(env, filename="vec_onlineboutique_gym_results_", info_keywords=info_keywords)
+        # env.reset()
+        # _, _, _, _, info = env.step([0, 0])
+        # info_keywords = tuple(info.keys())
+        # env = SubprocVecEnv([lambda: OnlineBoutique(k8s=k8s, goal_reward=goal) for i in range(8)])
+        # envs = VecMonitor(env, filename="vec_onlineboutique_gym_results_", info_keywords=info_keywords)
 
     else:
         logging.info('Invalid use_case!')
 
-    return envs
+    return env
 
 
 def main():

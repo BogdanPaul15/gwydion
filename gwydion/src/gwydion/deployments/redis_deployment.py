@@ -104,6 +104,7 @@ class RedisDeployment(Deployment):
                 self.metrics["latency"] = float(f"{redis_duration:.3f}")
 
     def update_desired_replicas(self) -> None:
+        # TODO: here can happen ZeroDivisionError (cpu_request/mem_request or threshold is 0)
         cpu_target_usage = self.num_pods * self.cpu_target
         mem_target_usage = self.num_pods * self.mem_target
 

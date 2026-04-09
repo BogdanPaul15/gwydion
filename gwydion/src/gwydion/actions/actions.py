@@ -37,7 +37,7 @@ class DoNothing(Action):
     """An action that maintains the current state without scaling."""
 
     def execute(self, env, _deployment_id: int) -> None:
-        logger.debug("[Step: %d] | Action: %s", env.current_step, self.label)
+        pass
 
     @property
     def label(self) -> str:

@@ -172,7 +172,7 @@ class BaseEnv(gym.Env):
         if not self.k8s:
             # Get namespace from the first deployment in the list
             namespace = self.deployment_list[0].namespace
-            base_dir = Path(__file__).resolve().parents[2]
+            base_dir = Path(__file__).resolve().parents[3]
             path = base_dir / "datasets" / "real" / namespace / "v1" / f"{self.name}_observation.csv"
             logger.debug("Loading dataset from %s", path)
 
