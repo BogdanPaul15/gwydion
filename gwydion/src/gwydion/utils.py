@@ -64,49 +64,38 @@ def backoff(
         return wrapper
     return decorator
 
-###REWARD FUNCTIONS###
-# def get_cost_reward(deployment_list):
-#     reward = 0
-
-#     for d in deployment_list:
-#         num_pods = d.num_pods
-#         desired_replicas = d.desired_replicas
-#         if num_pods == desired_replicas:
-#             reward += 1
-
-#     # if reward == 2:
-#         # return reward
-#     # else:
-#         # return 0
-
-#     return reward
+import pandas as pd
+from matplotlib import pyplot as plt
 
 
-# def get_latency_reward_redis(ID_MASTER, deployment_list):
-#     # Calculate the redis latency based on the redis exporter
-#     reward = float(deployment_list[ID_MASTER].latency)
-#     if reward > 250.0:
-#         reward = -250  # highest penalty over 250 ms
-#     else:
-#         reward = -float(deployment_list[ID_MASTER].latency)  # negative reward
+def test_model(model, env, n_episodes, n_steps, smoothing_window, fig_name):
+    episode_rewards = []
+    reward_sum = 0
+    obs = env.reset()
 
-#     return reward
+    print("------------Testing -----------------")
 
+    for e in range(n_episodes):
+        for _ in range(n_steps):
+            action, _ = model.predict(obs)
+            obs, reward, done, _ = env.step(action)
+            reward_sum += reward
+            if done:
+                episode_rewards.append(reward_sum)
+                print("Episode {} | Total reward: {} |".format(e, str(reward_sum)))
+                reward_sum = 0
+                obs = env.reset()
+                break
 
-# def get_latency_reward_online_boutique(ID_recommendation, deployment_list):
-#     # Calculate the latency based on the GET / POST requests
-#     reward = float(deployment_list[ID_recommendation].latency)
-#     if reward > 3000.0:
-#         reward = -3000  # highest penalty over 3 s
-#     else:
-#         reward = -float(deployment_list[ID_recommendation].latency)  # negative reward
+    env.close()
 
-#     return reward
+    # Free memory
+    del model, env
 
-
-# def get_num_pods(deployment_list):
-#     n = 0
-#     for d in deployment_list:
-#         n += d.num_pods
-
-#     return n
+    # Plot the episode reward over time
+    plt.figure()
+    rewards_smoothed = pd.Series(episode_rewards).rolling(smoothing_window, min_periods=smoothing_window).mean()
+    plt.plot(rewards_smoothed)
+    plt.xlabel("Episode")
+    plt.ylabel("Reward")
+    plt.savefig(fig_name, dpi=250, bbox_inches='tight')

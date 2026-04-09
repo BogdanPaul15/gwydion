@@ -10,13 +10,12 @@ import yaml
 import numpy as np
 import pandas as pd
 import gymnasium as gym
-from gymnasium import spaces
 
 from gwydion.rewards import RewardStrategy
 from gwydion.deployments import build_deployment_list
 from gwydion.actions import build_action_set
 from gwydion.actions import build_action_space
-from .util import save_episode_stats
+from gwydion.utils import save_episode_stats
 
 logger = logging.getLogger(__name__)
 

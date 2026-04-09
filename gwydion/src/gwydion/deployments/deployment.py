@@ -7,7 +7,7 @@ import requests
 import kubernetes
 from kubernetes import client
 
-from gwydion.envs.util import backoff
+from gwydion.utils import backoff
 
 TOKEN = ""
 HOST = ""

@@ -9,10 +9,10 @@ from sb3_contrib import RecurrentPPO, MaskablePPO
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 
 from gwydion.envs import Redis, OnlineBoutique
+from gwydion.utils import test_model
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 # Logging
-from policies.util.util import test_model
 
 logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')

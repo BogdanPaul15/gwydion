@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 from gymnasium import spaces
 
-from gwydion.envs import BaseEnv
+from .base import BaseEnv
 
 ID_REDIS_LEADER = 0
 ID_REDIS_FOLLOWER = 1
