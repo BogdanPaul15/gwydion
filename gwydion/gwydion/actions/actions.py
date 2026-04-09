@@ -27,18 +27,25 @@ class Action(ABC):
         """Returns a string representation of the action."""
         raise NotImplementedError
 
+    @property
+    def is_noop(self) -> bool:
+        """Whether this action leaves the deployment unchanged."""
+        return False
+
 @dataclass
 class DoNothing(Action):
     """An action that maintains the current state without scaling."""
 
     def execute(self, env, _deployment_id: int) -> None:
-        env.none_counter += 1
-        logger.debug("[Step: %d] | Action: %s | Counter: %d",
-                    env.current_step, self.label, env.none_counter)
+        logger.debug("[Step: %d] | Action: %s", env.current_step, self.label)
 
     @property
     def label(self) -> str:
         return "Do Nothing"
+
+    @property
+    def is_noop(self) -> bool:
+        return True
 
 @dataclass
 class ScaleUp(Action):
@@ -57,9 +64,6 @@ class ScaleUp(Action):
             env.constraint_max_pod_replicas = True
             logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
                         env.current_step, self.label, deployment.name, deployment.max_pods)
-        else:
-            logger.debug("[Step: %d] | Action: %s for %s | Pods: %d",
-                        env.current_step, self.label, deployment.name, deployment.num_pods)
 
     @property
     def label(self) -> str:
@@ -82,9 +86,6 @@ class ScaleDown(Action):
             env.constraint_min_pod_replicas = True
             logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
                         env.current_step, self.label, deployment.name, deployment.min_pods)
-        else:
-            logger.debug("[Step: %d] | Action: %s for %s | Pods: %d",
-                        env.current_step, self.label, deployment.name, deployment.num_pods)
 
     @property
     def label(self) -> str:

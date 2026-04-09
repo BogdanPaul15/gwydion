@@ -20,8 +20,6 @@ from .util import save_episode_stats
 
 logger = logging.getLogger(__name__)
 
-ACTION_DO_NOTHING = 0
-
 class BaseEnv(gym.Env):
     """Abstract Base Class for Kubernetes Horizontal Auto-scaling Environments.
     
@@ -298,7 +296,7 @@ class BaseEnv(gym.Env):
         self.take_action(deployment_id, action_id)
 
         if self.k8s:
-            if action_id != ACTION_DO_NOTHING and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
+            if not self._actions[action_id].is_noop and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
                 time.sleep(self.waiting_period)
 
             for d in self.deployment_list:
@@ -432,6 +430,15 @@ class BaseEnv(gym.Env):
 
         self.action_stats[action] += 1
         self._actions[action].execute(self, deployment_id)
+
+        if self._actions[action].is_noop:
+            self.none_counter += 1
+        else:
+            self.none_counter = 0
+
+        logger.debug("[Step: %d] | Action: %s | Deployment: %s | None counter: %d",
+                     self.current_step, self._actions[action].label,
+                     self.deployment_list[deployment_id].name, self.none_counter)
 
     @property
     def reward(self):
