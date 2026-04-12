@@ -1,7 +1,6 @@
 from typing import Any
 import optuna
 
-from .maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
 from .ppo import sample_ppo_params, convert_ppo_params
 
 def sample_maskable_ppo_params(trial: optuna.Trial, n_envs: int = 1) -> dict[str, Any]:

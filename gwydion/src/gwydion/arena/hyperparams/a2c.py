@@ -3,7 +3,7 @@ import optuna
 
 from .maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
 
-def sample_a2c_params(trial: optuna.Trial) -> dict:
+def sample_a2c_params(trial: optuna.Trial, n_envs: int = 1) -> dict:
     """Sample A2C hyperparameters for one Optuna trial."""
     n_steps_pow = trial.suggest_int("n_steps_pow", 2, 7) # 4 - 128
 
