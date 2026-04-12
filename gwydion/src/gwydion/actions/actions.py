@@ -27,6 +27,10 @@ class Action(ABC):
         """Returns a string representation of the action."""
         raise NotImplementedError
 
+    def can_execute(self, env, deployment_id: int) -> bool:
+        """Whether this action is valid for the given deployment."""
+        return True
+
     @property
     def is_noop(self) -> bool:
         """Whether this action leaves the deployment unchanged."""
@@ -65,6 +69,10 @@ class ScaleUp(Action):
             logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
                         env.current_step, self.label, deployment.name, deployment.max_pods)
 
+    def can_execute(self, env, deployment_id: int) -> bool:
+        deployment = env.deployment_list[deployment_id]
+        return deployment.num_pods + self.replicas <= deployment.max_pods
+
     @property
     def label(self) -> str:
         return f"Scale Up {self.replicas}"
@@ -86,6 +94,10 @@ class ScaleDown(Action):
             env.constraint_min_pod_replicas = True
             logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
                         env.current_step, self.label, deployment.name, deployment.min_pods)
+
+    def can_execute(self, env, deployment_id: int) -> bool:
+        deployment = env.deployment_list[deployment_id]
+        return deployment.num_pods + self.replicas >= deployment.min_pods
 
     @property
     def label(self) -> str:
