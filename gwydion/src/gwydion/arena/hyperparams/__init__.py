@@ -1,6 +1,6 @@
-from gwydion.hyperparams.maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
-from gwydion.hyperparams.ppo import convert_ppo_params, sample_ppo_params
-from gwydion.hyperparams.a2c import convert_a2c_params, sample_a2c_params
-from gwydion.hyperparams.recurrent_ppo import convert_rppo_params, sample_rppo_params
-from gwydion.hyperparams.maskable_ppo import convert_maskable_ppo_params, sample_maskable_ppo_params
-from gwydion.hyperparams.trpo import convert_trpo_params, sample_trpo_params
+from .maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
+from .ppo import convert_ppo_params, sample_ppo_params
+from .a2c import convert_a2c_params, sample_a2c_params
+from .recurrent_ppo import convert_recurrent_ppo_params, sample_recurrent_ppo_params
+from .maskable_ppo import convert_maskable_ppo_params, sample_maskable_ppo_params
+from .trpo import convert_trpo_params, sample_trpo_params

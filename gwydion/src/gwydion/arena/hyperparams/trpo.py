@@ -12,8 +12,6 @@ def sample_trpo_params(trial: optuna.Trial, n_envs: int = 1) -> dict[str, Any]:
     one_minus_gae_lambda = trial.suggest_float("one_minus_gae_lambda", 0.0001, 0.1, log=True)
 
     learning_rate    = trial.suggest_float("learning_rate", 1e-5, 0.002, log=True)
-    ent_coef         = trial.suggest_float("ent_coef", 1e-8, 0.1, log=True)
-    max_grad_norm    = trial.suggest_float("max_grad_norm", 0.3, 2.0)
 
     n_critic_updates = trial.suggest_int("n_critic_updates", 5, 30)
     cg_max_steps     = trial.suggest_int("cg_max_steps", 5, 30)
@@ -38,8 +36,6 @@ def sample_trpo_params(trial: optuna.Trial, n_envs: int = 1) -> dict[str, Any]:
         "one_minus_gamma":       one_minus_gamma,
         "one_minus_gae_lambda":  one_minus_gae_lambda,
         "learning_rate":         learning_rate,
-        "ent_coef":              ent_coef,
-        "max_grad_norm":         max_grad_norm,
         "n_critic_updates":      n_critic_updates,
         "cg_max_steps":          cg_max_steps,
         "target_kl":             target_kl,

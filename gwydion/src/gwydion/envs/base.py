@@ -2,7 +2,6 @@ from typing import Optional
 
 import time
 from pathlib import Path
-from datetime import datetime
 from statistics import mean
 import logging
 import yaml
@@ -24,6 +23,8 @@ logger = logging.getLogger(__name__)
 logging.disable(logging.ERROR)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+logging.disable(logging.FATAL)
 
 class BaseEnv(gym.Env):
     """Abstract Base Class for Kubernetes Horizontal Auto-scaling Environments.
@@ -299,7 +300,6 @@ class BaseEnv(gym.Env):
              mean(self.avg_pods) if self.avg_pods else 0.0)
 
         self.info = {
-            "reward": f"{self.total_reward:.2f}",
             'avg_pods': f"{mean(self.avg_pods):.3f}",
             'avg_latency': f"{np.mean(self.avg_latency):.3f}",
             'executionTime': f"{self.execution_time:.3f}"
