@@ -368,6 +368,15 @@ class BaseEnv(gym.Env):
                      [self._actions[a].label for _, a in action_pairs],
                      self.none_counter)
 
+    def action_masks(self) -> list[bool]:
+        """Returns a boolean mask over a flattened space.
+        
+        Requires a Discrete action space. Each entry corresponds to:
+            flat_id = deployment_id * num_actions + action_id
+        """
+        return [action.can_execute(self, idx) for idx in range(self.num_apps)
+                 for action in self._actions]
+
     @property
     def reward(self) -> float:
         """Returns the current reward as computed by the reward strategy."""
