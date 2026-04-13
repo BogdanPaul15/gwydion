@@ -3,7 +3,7 @@ import optuna
 
 from .maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
 
-def sample_a2c_params(trial: optuna.Trial, n_envs: int = 1) -> dict:
+def sample_a2c_params(trial: optuna.Trial) -> dict:
     """Sample A2C hyperparameters for one Optuna trial."""
     n_steps_pow = trial.suggest_int("n_steps_pow", 2, 7) # 4 - 128
 
@@ -41,23 +41,14 @@ def convert_a2c_params(sampled: dict[str, Any]) -> dict[str, Any]:
     """Translate raw sample_a2c_params() dict into A2C(**kwargs)."""
     hyperparams = sampled.copy()
 
-    if "n_steps_pow" in hyperparams:
-        hyperparams["n_steps"] = 2 ** hyperparams.pop("n_steps_pow")
+    hyperparams["n_steps"] = 2 ** hyperparams.pop("n_steps_pow")
 
-    if "one_minus_gamma" in hyperparams:
-        hyperparams["gamma"] = 1 - hyperparams.pop("one_minus_gamma")
-    if "one_minus_gae_lambda" in hyperparams:
-        hyperparams["gae_lambda"] = 1 - hyperparams.pop("one_minus_gae_lambda")
+    hyperparams["gamma"] = 1 - hyperparams.pop("one_minus_gamma")
+    hyperparams["gae_lambda"] = 1 - hyperparams.pop("one_minus_gae_lambda")
 
-    net_arch   = hyperparams.pop("net_arch", None)
-    activation_fn = hyperparams.pop("activation_fn", None)
-
-    if net_arch or activation_fn:
-        policy_kwargs = {}
-        if net_arch:
-            policy_kwargs["net_arch"] = NET_ARCH_MAP[net_arch]
-        if activation_fn:
-            policy_kwargs["activation_fn"] = ACTIVATION_FN_MAP[activation_fn]
-        hyperparams["policy_kwargs"] = policy_kwargs
+    hyperparams["policy_kwargs"] = {
+        "net_arch": NET_ARCH_MAP[hyperparams.pop("net_arch")],
+        "activation_fn": ACTIVATION_FN_MAP[hyperparams.pop("activation_fn")],
+    }
 
     return hyperparams

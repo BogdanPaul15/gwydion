@@ -3,9 +3,9 @@ import optuna
 
 from .ppo import sample_ppo_params, convert_ppo_params
 
-def sample_recurrent_ppo_params(trial: optuna.Trial, n_envs: int = 1) -> dict:
-    """Sample PPO hyperparameters for one Optuna trial."""
-    sampled = sample_ppo_params(trial, n_envs)
+def sample_recurrent_ppo_params(trial: optuna.Trial) -> dict:
+    """Sample RecurrentPPO hyperparameters for one Optuna trial."""
+    sampled = sample_ppo_params(trial)
 
     sampled.update({
         "lstm_hidden_size": trial.suggest_categorical("lstm_hidden_size", [16, 32, 64, 128, 256, 512]),
@@ -15,13 +15,13 @@ def sample_recurrent_ppo_params(trial: optuna.Trial, n_envs: int = 1) -> dict:
 
     return sampled
 
-def convert_recurrent_ppo_params(sampled: dict[str, Any]) -> dict[str, Any]:
+def convert_recurrent_ppo_params(sampled: dict[str, Any], n_envs: int = 1) -> dict[str, Any]:
     """Translate raw sample_recurrent_ppo_params() dict into RecurrentPPO(**kwargs)."""
     lstm_hidden_size   = sampled.pop("lstm_hidden_size")
     n_lstm_layers      = sampled.pop("n_lstm_layers")
     enable_critic_lstm = sampled.pop("enable_critic_lstm")
 
-    hyperparams = convert_ppo_params(sampled)
+    hyperparams = convert_ppo_params(sampled, n_envs)
 
     hyperparams["policy_kwargs"].update({
         "lstm_hidden_size": int(lstm_hidden_size),

@@ -3,7 +3,7 @@ import optuna
 
 from .maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
 
-def sample_trpo_params(trial: optuna.Trial, n_envs: int = 1) -> dict[str, Any]:
+def sample_trpo_params(trial: optuna.Trial) -> dict[str, Any]:
     """Sample TRPO hyperparameters for one Optuna trial."""
     n_steps_pow    = trial.suggest_int("n_steps_pow", 5, 12)
     batch_size_pow = trial.suggest_int("batch_size_pow", 2, 10)
@@ -19,16 +19,10 @@ def sample_trpo_params(trial: optuna.Trial, n_envs: int = 1) -> dict[str, Any]:
     net_arch         = trial.suggest_categorical("net_arch", ["small", "medium"])
     activation_fn    = trial.suggest_categorical("activation_fn", ["tanh", "relu"])
 
-    n_steps    = 2 ** n_steps_pow
-    batch_size = 2 ** batch_size_pow
-    if batch_size > n_steps * n_envs:
-        batch_size_pow = n_steps_pow
-        batch_size     = n_steps
-
     trial.set_user_attr("gamma",      1 - one_minus_gamma)
     trial.set_user_attr("gae_lambda", 1 - one_minus_gae_lambda)
-    trial.set_user_attr("n_steps",    n_steps)
-    trial.set_user_attr("batch_size", batch_size)
+    trial.set_user_attr("n_steps",    2 ** n_steps_pow)
+    trial.set_user_attr("batch_size", 2 ** batch_size_pow)
 
     return {
         "n_steps_pow":           n_steps_pow,
@@ -43,29 +37,29 @@ def sample_trpo_params(trial: optuna.Trial, n_envs: int = 1) -> dict[str, Any]:
         "activation_fn":         activation_fn,
     }
 
-def convert_trpo_params(sampled: dict[str, Any]) -> dict[str, Any]:
+def convert_trpo_params(sampled: dict[str, Any], n_envs: int = 1) -> dict[str, Any]:
     """Translate raw sample_trpo_params() dict into TRPO(**kwargs)."""
     hyperparams = sampled.copy()
 
-    if "batch_size_pow" in hyperparams:
-        hyperparams["batch_size"] = 2 ** hyperparams.pop("batch_size_pow")
-    if "n_steps_pow" in hyperparams:
-        hyperparams["n_steps"] = 2 ** hyperparams.pop("n_steps_pow")
+    n_steps = 2 ** hyperparams.pop("n_steps_pow")
+    batch_size = 2 ** hyperparams.pop("batch_size_pow")
 
-    if "one_minus_gamma" in hyperparams:
-        hyperparams["gamma"] = 1 - hyperparams.pop("one_minus_gamma")
-    if "one_minus_gae_lambda" in hyperparams:
-        hyperparams["gae_lambda"] = 1 - hyperparams.pop("one_minus_gae_lambda")
+    rollout_size = n_steps * n_envs
+    batch_size = min(batch_size, rollout_size)
 
-    net_arch = hyperparams.pop("net_arch", None)
-    activation_fn = hyperparams.pop("activation_fn", None)
+    # Ensure batch_size divides rollout buffer evenly
+    while rollout_size % batch_size != 0:
+        batch_size //= 2
 
-    if net_arch or activation_fn:
-        policy_kwargs = {}
-        if net_arch:
-            policy_kwargs["net_arch"] = NET_ARCH_MAP[net_arch]
-        if activation_fn:
-            policy_kwargs["activation_fn"] = ACTIVATION_FN_MAP[activation_fn]
-        hyperparams["policy_kwargs"] = policy_kwargs
+    hyperparams["n_steps"] = n_steps
+    hyperparams["batch_size"] = batch_size
+
+    hyperparams["gamma"] = 1 - hyperparams.pop("one_minus_gamma")
+    hyperparams["gae_lambda"] = 1 - hyperparams.pop("one_minus_gae_lambda")
+
+    hyperparams["policy_kwargs"] = {
+        "net_arch": NET_ARCH_MAP[hyperparams.pop("net_arch")],
+        "activation_fn": ACTIVATION_FN_MAP[hyperparams.pop("activation_fn")],
+    }
 
     return hyperparams

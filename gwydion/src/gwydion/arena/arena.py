@@ -10,7 +10,7 @@ import optuna
 from optuna.samplers import TPESampler
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, DummyVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv, VecNormalize
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from sb3_contrib.common.maskable.evaluation import evaluate_policy as maskable_evaluate_policy
@@ -133,13 +133,16 @@ class Arena:
         output_dir (str): Root directory for all experiment artifacts.
     """
     def __init__(self, env_cls: Type[BaseEnv], env_kwargs: Dict[str, Any],
-                 alg: str = "ppo", n_envs: int = 1, seed: int = 42,
-                 output_dir: str = "arena_results") -> None:
+                 eval_env_kwargs: Dict[str, Any], alg: str = "ppo", n_envs: int = 1,
+                 seed: int = 42, output_dir: str = "arena_results") -> None:
         """Initializes the Arena and creates the experiment output directory.
         
         Args:
             env_cls (Type[BaseEnv]): Gymnasium environment class (must subclass BaseEnv).
             env_kwargs (Dict[str, Any]): Keyword arguments passed to the environment constructor.
+                Must include "reward_strategy" (a RewardStrategy instance) and
+                "config_path" (path to the environment YAML config).
+            eval_env_kwargs (Dict[str, Any]): Keyword arguments passed to the evaluation environment constructor.
                 Must include "reward_strategy" (a RewardStrategy instance) and
                 "config_path" (path to the environment YAML config).
             alg (str): Algorithm name as registered in the spec registry
@@ -153,6 +156,7 @@ class Arena:
         """
         self.env_cls = env_cls
         self.env_kwargs = env_kwargs
+        self.eval_env_kwargs = eval_env_kwargs or env_kwargs
         self.n_envs = n_envs
         self.seed = seed
 
@@ -230,13 +234,13 @@ class Arena:
         )
 
         def objective(trial: optuna.Trial) -> float:
-            sampled = self.spec.sampler(trial, n_envs=self.n_envs)
-            converted = self.spec.converter(sampled)
+            sampled = self.spec.sampler(trial)
+            converted = self.spec.converter(sampled, n_envs=self.n_envs)
 
             gamma = converted.get("gamma", 0.99)
             env = self._make_env(training=True, gamma=gamma)
             eval_env = self._make_env(training=False, gamma=gamma)
-            maskable = self.spec.cls.__name__ == "MaskablePPO"
+            maskable = self.spec.maskable
 
             try:
                 model = self._build_model(env, converted)
@@ -282,8 +286,53 @@ class Arena:
 
         return best_sampled
 
-    def train(self,):
+    def train(self, hyperparams: Optional[Dict[str, Any]] = None, total_steps: int = 500_000, save_freq: int = 50_000,
+              run_label: Optional[str] = None, extra_callbacks=None, resume_from=None):
         """TODO"""
+        converted = self.spec.converter(hyperparams, n_envs=self.n_envs) if hyperparams else {}
+        gamma = converted.get("gamma", 0.99)
+
+        ts = datetime.now().strftime("%H:%M:%S_%Y%m%d")
+        label = run_label or "default"
+        run_name = f"train_{label}_{total_steps}_{ts}"
+        run_dir = self.output_dir / run_name
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        env = self._make_env(training=True, gamma=gamma)
+
+        if resume_from:
+            model_path, stats_path = resume_from
+            env = VecNormalize.load(stats_path, env.venv)
+            env.training = True
+            env.norm_reward = True
+            model = self.spec.cls.load(model_path, env=env)
+            reset_timesteps = False
+        else:
+            model = self._build_model(env, converted, tensorboard_log=str(run_dir / "tb"))
+            reset_timesteps = True
+
+        checkpoint_callback = CheckpointCallback(
+            save_freq=save_freq,
+            save_path=str(run_dir / "checkpoints"),
+            name_prefix="model",
+        )
+
+        episode_callback = _EpisodeCallback()
+        callbacks = [checkpoint_callback, episode_callback]
+        if extra_callbacks:
+            callbacks.extend(extra_callbacks)
+
+        model.learn(
+            total_timesteps=total_steps,
+            callback=callbacks,
+            reset_num_timesteps=reset_timesteps,
+        )
+
+        model.save(str(run_dir / "model_final"))
+        env.save(str(run_dir / "vecnormalize.pkl"))
+        env.close()
+
+        return str(run_dir / "model_final.zip"), str(run_dir / "vecnormalize.pkl")
 
     def test(self):
         """TODO"""

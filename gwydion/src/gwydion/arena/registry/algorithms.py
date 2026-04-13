@@ -21,11 +21,13 @@ class AlgorithmSpec:
         policy: The SB3 policy string.
         sampler: Sampling method for SB3 algorithm hyperparams. 
         converter: Converter from Optuna hyperparams suggestions to SB3 hyperparams.
+        maskable: Whether a maskable algorithm is used.
     """
     cls:                  Type[BaseAlgorithm]
     policy:               str
     sampler:              Callable[..., dict[str, Any]]
     converter:            Callable[[dict[str, Any]], dict[str, Any]]
+    maskable:             bool
 
 ALGORITHM_SPECS: dict[str, AlgorithmSpec] = {
     "ppo": AlgorithmSpec(
@@ -33,30 +35,35 @@ ALGORITHM_SPECS: dict[str, AlgorithmSpec] = {
         policy="MlpPolicy",
         sampler=sample_ppo_params,
         converter=convert_ppo_params,
+        maskable=False,
     ),
     "recurrent_ppo": AlgorithmSpec(
         cls=RecurrentPPO,
         policy="MlpLstmPolicy",
         sampler=sample_recurrent_ppo_params,
         converter=convert_recurrent_ppo_params,
+        maskable=False,
     ),
     "maskable_ppo": AlgorithmSpec(
         cls=MaskablePPO,
         policy="MlpPolicy",
         sampler=sample_maskable_ppo_params,
         converter=convert_maskable_ppo_params,
+        maskable=True,
     ),
     "trpo": AlgorithmSpec(
         cls=TRPO,
         policy="MlpPolicy",
         sampler=sample_trpo_params,
         converter=convert_trpo_params,
+        maskable=False,
     ),
     "a2c": AlgorithmSpec(
         cls=A2C,
         policy="MlpPolicy",
         sampler=sample_a2c_params,
         converter=convert_a2c_params,
+        maskable=False,
     ),
 }
 

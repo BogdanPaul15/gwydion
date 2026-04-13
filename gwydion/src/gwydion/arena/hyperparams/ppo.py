@@ -9,7 +9,7 @@ def linear_schedule(initial_value: float):
         return progress_remaining * initial_value
     return func
 
-def sample_ppo_params(trial: optuna.Trial, n_envs: int = 1) -> dict:
+def sample_ppo_params(trial: optuna.Trial) -> dict:
     """Sample PPO hyperparameters for one Optuna trial."""
     batch_size_pow = trial.suggest_int("batch_size_pow", 2, 10) # 4 to 1024
     n_steps_pow    = trial.suggest_int("n_steps_pow", 5, 12) # 32 to 4096
@@ -28,16 +28,10 @@ def sample_ppo_params(trial: optuna.Trial, n_envs: int = 1) -> dict:
     net_arch      = trial.suggest_categorical("net_arch", ["tiny", "small"])
     activation_fn = trial.suggest_categorical("activation_fn", ["tanh", "relu"])
 
-    n_steps    = 2 ** n_steps_pow
-    batch_size = 2 ** batch_size_pow
-    if batch_size > n_steps * n_envs:
-        batch_size_pow = n_steps_pow
-        batch_size     = n_steps
-
     trial.set_user_attr("gamma",      1 - one_minus_gamma)
     trial.set_user_attr("gae_lambda", 1 - one_minus_gae_lambda)
-    trial.set_user_attr("n_steps",    n_steps)
-    trial.set_user_attr("batch_size", batch_size)
+    trial.set_user_attr("n_steps",    2 ** n_steps_pow)
+    trial.set_user_attr("batch_size", 2 ** batch_size_pow)
 
     return {
         "batch_size_pow":       batch_size_pow,
@@ -54,33 +48,33 @@ def sample_ppo_params(trial: optuna.Trial, n_envs: int = 1) -> dict:
         "activation_fn":        activation_fn,
     }
 
-def convert_ppo_params(sampled: dict[str, Any]) -> dict[str, Any]:
+def convert_ppo_params(sampled: dict[str, Any], n_envs: int = 1) -> dict[str, Any]:
     """Translate raw sample_ppo_params() dict into PPO(**kwargs)."""
     hyperparams = sampled.copy()
 
-    if "batch_size_pow" in hyperparams:
-        hyperparams["batch_size"] = 2 ** hyperparams.pop("batch_size_pow")
-    if "n_steps_pow" in hyperparams:
-        hyperparams["n_steps"] = 2 ** hyperparams.pop("n_steps_pow")
+    n_steps = 2 ** hyperparams.pop("n_steps_pow")
+    batch_size = 2 ** hyperparams.pop("batch_size_pow")
 
-    if "one_minus_gamma" in hyperparams:
-        hyperparams["gamma"] = 1 - hyperparams.pop("one_minus_gamma")
-    if "one_minus_gae_lambda" in hyperparams:
-        hyperparams["gae_lambda"] = 1 - hyperparams.pop("one_minus_gae_lambda")
+    rollout_size = n_steps * n_envs
+    batch_size = min(batch_size, rollout_size)
+
+    # Ensure batch_size divides rollout buffer evenly
+    while rollout_size % batch_size != 0:
+        batch_size //= 2
+
+    hyperparams["n_steps"] = n_steps
+    hyperparams["batch_size"] = batch_size
+
+    hyperparams["gamma"] = 1 - hyperparams.pop("one_minus_gamma")
+    hyperparams["gae_lambda"] = 1 - hyperparams.pop("one_minus_gae_lambda")
 
     lr_schedule = hyperparams.pop("lr_schedule", "constant")
     if lr_schedule == "linear":
         hyperparams["learning_rate"] = linear_schedule(hyperparams["learning_rate"])
 
-    net_arch = hyperparams.pop("net_arch", None)
-    activation_fn = hyperparams.pop("activation_fn", None)
-
-    if net_arch or activation_fn:
-        policy_kwargs = {}
-        if net_arch:
-            policy_kwargs["net_arch"] = NET_ARCH_MAP[net_arch]
-        if activation_fn:
-            policy_kwargs["activation_fn"] = ACTIVATION_FN_MAP[activation_fn]
-        hyperparams["policy_kwargs"] = policy_kwargs
+    hyperparams["policy_kwargs"] = {
+        "net_arch": NET_ARCH_MAP[hyperparams.pop("net_arch")],
+        "activation_fn": ACTIVATION_FN_MAP[hyperparams.pop("activation_fn")],
+    }
 
     return hyperparams
