@@ -107,7 +107,6 @@ class BaseEnv(gym.Env):
         self.info = {}
 
         self.none_counter = 0
-        self.traffic = []
 
         self.avg_pods = []
         self.avg_latency = []
@@ -132,7 +131,6 @@ class BaseEnv(gym.Env):
 
         if not self.k8s:
             self._load_dataset()
-            self.traffic = self.simulation_traffic(self.deployments_names[env_cfg["target_id"]])
 
         logger.info("Environment: %s | Mode: %s | Strategy: %s | Steps per episode: %d",
             self.name, "K8s" if self.k8s else "Simulation",
@@ -183,46 +181,11 @@ class BaseEnv(gym.Env):
             try:
                 self.df = pd.read_csv(path)
                 for name in self.deployments_names:
-                    self.df[f"diff-{name}"] = self.df[f"{name}_num_pods"].diff()
+                    self.df[f"diff-{name}"] = self.df[f"{name}_num_pods"].diff().fillna(0).astype(int)
                 logger.info("Dataset loaded: %s | Rows: %d", path.name, len(self.df))
             except FileNotFoundError as e:
                 logger.error("Dataset not found at %s: %s", path, e, exc_info=True)
                 raise
-
-    def normalize(self, obs: np.ndarray) -> np.ndarray:
-        """Normalizes the observation vector using the high bounds of the space.
-        
-        Note:
-            TODO: Normalization can be done with a Gymnasium wrapper.
-            Reference: https://gymnasium.farama.org/api/wrappers/observation_wrappers/#gymnasium.wrappers.NormalizeObservation
-
-        Args:
-            obs: The raw observation.
-
-        Returns:
-            np.ndarray
-        """
-        return obs / self.observation_space.high
-
-    def simulation_traffic(self, deployment: str) -> List[float]:
-        """Extracts unique traffic values for the specified deployment.
-        
-        Args:
-            deployment (str): The name of the deployment to extract traffic for
-                (e.g., "redis-leader", "frontend")
-
-        Returns:
-            List[float]: A list of unique traffic values preserved in  their
-                original appearance order.
-        """
-        column = f"{deployment}_traffic_in"
-        if self.df is not None and column in self.df.columns:
-            seen = set()
-            return [
-                traffic_value for traffic_value in self.df[column]
-                if not (traffic_value in seen or seen.add(traffic_value))
-            ]
-        return []
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None) -> tuple[np.ndarray, dict]:
         """Resets the environment to an initial state and returns an initial observation.
@@ -384,27 +347,33 @@ class BaseEnv(gym.Env):
 
             for i in range(self.num_apps):
                 name = self.deployments_names[i]
+                snapshot = data
 
-                pod_match = data.loc[data[f"{name}_num_pods"] == pods[i]]
-                exact_match = pod_match.loc[pod_match[f"diff-{name}"] == diff[i]]
+                exact = data.loc[(data[f"{name}_num_pods"] == pods[i]) &
+                                 (data[f"diff-{name}"] == diff[i])]
 
-                new_traffic = self.traffic.pop(0)
+                if len(exact) > 0:
+                    data = exact
+                    continue
 
-                if exact_match.size == 0:
-                    logger.debug("[Step: %d] | No match for pods=%s diff=%s on %s, relaxing diff filter",
-                                 self.current_step, pods[i], diff[i], name)
-                    data = pod_match
-                else:
-                    data = exact_match
+                pods_only = data.loc[data[f"{name}_num_pods"] == pods[i]]
 
-                self.traffic.append(new_traffic)
+                if len(pods_only) > 0:
+                    logger.debug("[Step %d] | No exact match for %s (pods=%d, diff=%d), relaxing diff filter",
+                                 self.current_step, name, pods[i], diff[i])
+                    data = pods_only
+                    continue
 
-                if data.size == 0:
-                    logger.warning("[Step: %d] | No pod match for %s (pods=%d). Sampling full dataset.",
-                           self.current_step, name, pods[i])
-                    data = self.df.loc[self.df[f"{name}_num_pods"] == pods[i]]
+                logger.warning("[Step %d] | No pod match for %s (pods=%d) within current candidates. "
+                    "Keeping previous filter state (%d rows).",
+                    self.current_step, name, pods[i], len(snapshot))
+                data = snapshot
 
-            sample = data.sample()
+            if len(data) == 0:
+                logger.warning("[Step %d] | All filters exhausted. Sampling from full dataset.", self.current_step)
+                data = self.df
+
+            sample = data.sample(n=1)
 
         for i, name in enumerate(self.deployments_names):
             self.deployment_list[i].metrics["cpu_usage"] = int(sample[f"{name}_cpu_usage"].values[0])
