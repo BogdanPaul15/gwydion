@@ -16,6 +16,7 @@ from gwydion.rewards import RewardStrategy
 from gwydion.deployments import build_deployment_list
 from gwydion.actions import build_action_set
 from gwydion.actions import build_action_space
+from gwydion.simulation import build_simulation_strategies
 from gwydion.utils import save_episode_stats
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,9 @@ class BaseEnv(gym.Env):
 
         if not self.k8s:
             self._load_dataset()
+
+            strategy_cfg = env_cfg.get("simulation_strategy", {"type": "default"})
+            self.simulation_strategy = build_simulation_strategies(strategy_cfg)
 
         logger.info("Environment: %s | Mode: %s | Strategy: %s | Steps per episode: %d",
             self.name, "K8s" if self.k8s else "Simulation",
@@ -269,7 +273,7 @@ class BaseEnv(gym.Env):
             for d in self.deployment_list:
                 d.update_k8s_obs()
         else:
-            self.simulation_update()
+            self.simulation_strategy.update(self)
 
         reward = self.reward
 
@@ -312,78 +316,6 @@ class BaseEnv(gym.Env):
             logger.info("="*100)
 
         return np.array(ob), reward, self.terminated, self.episode_over, self.info
-
-    # TODO: this simulation mode does work only for online_boutique simulation strategy
-    # redis environment has a different strategy (the redis strategy is prioritizing the deployment on which the last
-    # action was taken)
-    # Note: There is a situation when it tries to scale beyond its limits, and the system ends up
-    # getting a random sample, instead of looking for a situation with the same number of pods
-    def simulation_update(self) -> None:
-        """Updates the simulation environment state using historical data.
-
-        This method samples from the loaded dataset to simulate the next environment state
-        for each deployment, updating pod counts and metrics. It supports two strategies:
-        - On the first step, it samples a random state for all deployments.
-        - On subsequent steps, it filters the dataset to match the current and previous pod counts,
-          and applies the observed traffic pattern, then samples a matching state.
-
-        Updates the following for each deployment:
-            - num_pods
-            - num_previous_pods
-            - metrics (cpu_usage, mem_usage, received_traffic, transmit_traffic, latency)
-            - desired_replicas (via update_desired_replicas)
-        """
-        if self.current_step == 1:
-            sample = self.df.sample()
-
-            for i, name in enumerate(self.deployments_names):
-                self.deployment_list[i].num_pods = int(sample[f"{name}_num_pods"].values[0])
-                self.deployment_list[i].num_previous_pods = int(sample[f"{name}_num_pods"].values[0])
-
-        else:
-            pods = [d.num_pods for d in self.deployment_list]
-            diff = [d.num_pods - d.num_previous_pods for d in self.deployment_list]
-            data = self.df
-
-            for i in range(self.num_apps):
-                name = self.deployments_names[i]
-                snapshot = data
-
-                exact = data.loc[(data[f"{name}_num_pods"] == pods[i]) &
-                                 (data[f"diff-{name}"] == diff[i])]
-
-                if len(exact) > 0:
-                    data = exact
-                    continue
-
-                pods_only = data.loc[data[f"{name}_num_pods"] == pods[i]]
-
-                if len(pods_only) > 0:
-                    logger.debug("[Step %d] | No exact match for %s (pods=%d, diff=%d), relaxing diff filter",
-                                 self.current_step, name, pods[i], diff[i])
-                    data = pods_only
-                    continue
-
-                logger.warning("[Step %d] | No pod match for %s (pods=%d) within current candidates. "
-                    "Keeping previous filter state (%d rows).",
-                    self.current_step, name, pods[i], len(snapshot))
-                data = snapshot
-
-            if len(data) == 0:
-                logger.warning("[Step %d] | All filters exhausted. Sampling from full dataset.", self.current_step)
-                data = self.df
-
-            sample = data.sample(n=1)
-
-        for i, name in enumerate(self.deployments_names):
-            self.deployment_list[i].metrics["cpu_usage"] = int(sample[f"{name}_cpu_usage"].values[0])
-            self.deployment_list[i].metrics["mem_usage"] = int(sample[f"{name}_mem_usage"].values[0])
-            self.deployment_list[i].metrics["received_traffic"] = int(sample[f"{name}_traffic_in"].values[0])
-            self.deployment_list[i].metrics["transmit_traffic"] = int(sample[f"{name}_traffic_out"].values[0])
-            self.deployment_list[i].metrics["latency"] = float(f"{sample[f'{name}_latency'].values[0]:.3f}")
-
-        for d in self.deployment_list:
-            d.update_desired_replicas()
 
     def take_action(self, deployment_id: int, action: int) -> None:
         """Executes the specified action on the given deployment.
