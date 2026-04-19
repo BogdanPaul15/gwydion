@@ -11,7 +11,7 @@ class RewardStrategy(ABC):
         penalty (float): The reward value returned when a Kubernetes constraint 
             is violated (e.g., attempting to scale below min_pods).
     """
-    def __init__(self, penalty=-1.0):
+    def __init__(self, penalty=-1.0) -> None:
         """Initializes the RewardStrategy with a configurable penalty.
 
         Args:
@@ -21,7 +21,7 @@ class RewardStrategy(ABC):
         self.penalty = penalty
 
     @abstractmethod
-    def calculate(self, env):
+    def calculate(self, env) -> float:
         """Calculates the objective-specific reward based on environment state.
 
         Args:
@@ -32,7 +32,7 @@ class RewardStrategy(ABC):
             float: The calculated reward value.
         """
 
-    def get_reward(self, env):
+    def get_reward(self, env) -> float:
         """Main entry point for the environment to fetch the current reward.
 
         This method handles the high-level logic of checking for boundary
@@ -50,7 +50,7 @@ class RewardStrategy(ABC):
 
         return self.calculate(env)
 
-    def get_constraint_penalty(self):
+    def get_constraint_penalty(self) -> float:
         """Returns the fixed penalty value defined during initialization.
 
         Returns:

@@ -10,6 +10,7 @@ import yaml
 import numpy as np
 import pandas as pd
 import gymnasium as gym
+from gymnasium import spaces
 
 from gwydion.rewards import RewardStrategy
 from gwydion.deployments import build_deployment_list
@@ -71,7 +72,7 @@ class BaseEnv(gym.Env):
         df (Optional[pd.DataFrame]): The primary dataset containing historical observations metrics
             (e.g., CPU, memory, traffic) used to drive the simulation.
     """
-    def __init__(self, config_path: str, reward_strategy: RewardStrategy = None):
+    def __init__(self, config_path: str, reward_strategy: RewardStrategy):
         """Initializes the BaseEnv with scaling constraints and core attributes.
 
         Args:
@@ -120,11 +121,14 @@ class BaseEnv(gym.Env):
         self._action_adapter = build_action_space(space_type, self.num_apps, self.num_actions)
         self.action_space = self._action_adapter.gym_space
         self.action_stats = [0 for _ in range(self.num_actions)]
-        self.observation_space = None
+        self.observation_space: spaces.Box = None # type: ignore
 
         # TODO: modify the path where obs and results file are saved
         self.obs_file = f"{self.name}_observations.csv"
         self.file_results = "results.csv"
+
+        # TODO add in docstring
+        self.episode_buffer = []
 
         if not self.k8s:
             self._load_dataset()
@@ -257,6 +261,8 @@ class BaseEnv(gym.Env):
         self.info = {}
         self.action_stats = [0 for _ in range(self.num_actions)]
 
+        self.episode_buffer = []
+
         self.deployment_list = build_deployment_list(self._deployments_cfgs, self.k8s)
 
         for deployment in self.deployment_list:
@@ -321,8 +327,9 @@ class BaseEnv(gym.Env):
 
         ob = self.get_state()
         date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        target_latency = self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"]
         # TODO: should be called before normalizing the observations
-        self.save_obs_to_csv(self.obs_file, np.array(ob), date, self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"])
+        self.collect_obs(np.array(ob), date, target_latency)
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
@@ -330,6 +337,7 @@ class BaseEnv(gym.Env):
         if self.current_step == self.max_steps:
             self.episode_count += 1
             self.execution_time = time.time() - self.time_start
+            self.save_obs_to_csv()
             save_episode_stats(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),
                         self.total_reward, self.execution_time)
             logger.info("="*100)
@@ -439,15 +447,35 @@ class BaseEnv(gym.Env):
                      self.deployment_list[deployment_id].name, self.none_counter)
 
     @property
-    def reward(self):
+    def reward(self) -> float:
         """Returns the current reward as computed by the reward strategy."""
         return self.reward_strategy.get_reward(self)
 
     def get_state(self):
         raise NotImplementedError
 
-    def get_observation_space(self):
+    def get_observation_space(self) -> spaces.Box:
         raise NotImplementedError
 
-    def save_obs_to_csv(self, obs_file, obs, date, latency):
+    def collect_obs(self, obs, date, latency):
+        """Buffers the current step's observations into memory.
+
+        This method should be called at every environment step. It appends
+        the state and metrics to an internal list (buffer) to avoid frequent
+        disk I/O.
+
+        Args:
+            obs: The observation vector from the environment state.
+            date: Timestamp string for the current step.
+            latency: The measured latency for the target deployment.
+        """
+        raise NotImplementedError
+
+    def save_obs_to_csv(self):
+        """Flushes the buffered episode observations to a CSV file.
+
+        This method should be called once at the end of an episode. It 
+        performs a bulk write of all buffered steps and should clear 
+        the internal buffer upon completion.
+        """
         raise NotImplementedError

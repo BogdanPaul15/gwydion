@@ -30,7 +30,7 @@ class OnlineBoutique(BaseEnv):
 
         return self.get_state(), self.info
 
-    def get_observation_space(self):
+    def get_observation_space(self) -> spaces.Box:
         recommendation = self.deployment_list[ID_RECOMMENDATION]
         productcatalog = self.deployment_list[ID_PRODUCT_CATALOG]
         cartservice = self.deployment_list[ID_CART_SERVICE]
@@ -100,7 +100,26 @@ class OnlineBoutique(BaseEnv):
             self.none_counter,
         ], dtype=np.float32)
 
-    def save_obs_to_csv(self, obs_file, obs, date, latency):
+    def collect_obs(self, obs, date, latency):
+        row_data = {
+            "date": date,
+            "recommendationservice_latency": float(f"{latency:.3f}")
+        }
+
+        for i, d in enumerate(self.deployment_list):
+            idx = i * 3
+            row_data.update({
+                f"{d.name}_num_pods": int(obs[idx]),
+                f"{d.name}_cpu_usage": int(obs[idx + 1]),
+                f"{d.name}_mem_usage": int(obs[idx + 2])
+            })
+        self.episode_buffer.append(row_data)
+
+    def save_obs_to_csv(self):
+        if not self.episode_buffer:
+            return
+
+        obs_file = self.obs_file
         file_exists = Path(obs_file).exists()
 
         with open(obs_file, "a+", encoding="utf-8", newline="") as f:
@@ -114,19 +133,9 @@ class OnlineBoutique(BaseEnv):
             fields.append("recommendationservice_latency")
 
             writer = csv.DictWriter(f, fieldnames=fields)
-
             if not file_exists:
                 writer.writeheader()
 
-            row_data = {
-                "date": date,
-                "recommendationservice_latency": float(f"{latency:.3f}")
-            }
+            writer.writerows(self.episode_buffer)
 
-            for i, d in enumerate(self.deployment_list):
-                idx = i * 3
-                row_data[f"{d.name}_num_pods"] = int(obs[idx])
-                row_data[f"{d.name}_cpu_usage"] = int(obs[idx + 1])
-                row_data[f"{d.name}_mem_usage"] = int(obs[idx + 2])
-
-            writer.writerow(row_data)
+        self.episode_buffer = []
