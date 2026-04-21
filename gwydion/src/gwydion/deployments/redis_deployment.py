@@ -37,16 +37,16 @@ class RedisDeployment(Deployment):
         self.metrics = {
             "cpu_usage": 0,
             "mem_usage": 0,
-            "received_traffic": 0,
-            "transmit_traffic": 0,
+            "traffic_in": 0,
+            "traffic_out": 0,
             "latency": 0.0,
         }
 
     def collect_metrics(self) -> None:
         self.metrics["cpu_usage"] = 0
         self.metrics["mem_usage"] = 0
-        self.metrics["received_traffic"] = 0
-        self.metrics["transmit_traffic"] = 0
+        self.metrics["traffic_in"] = 0
+        self.metrics["traffic_out"] = 0
         self.metrics["latency"] = 0.0
 
         # TODO: maybe this part can be aggregated into one query for each metric
@@ -64,19 +64,22 @@ class RedisDeployment(Deployment):
 
             res_mem = self.fetch_prom(query_mem)
             if res_mem:
+                # TODO We should divide by 1024^2 if we want MiB (Mebibytes)
                 self.metrics["mem_usage"] += int(float(res_mem[0]["value"][1]) / 1000000)
             else:
                 logger.warning("No MEM data from Prometheus for pod %s", pod)
 
             res_rec = self.fetch_prom(query_rec)
             if res_rec:
-                self.metrics["received_traffic"] += int(float(res_rec[0]["value"][1]) / 1000)
+                # TODO We should divide by 1024 if we want KiB/s (Kibibytes)
+                self.metrics["traffic_in"] += int(float(res_rec[0]["value"][1]) / 1000)
             else:
                 logger.warning("No receive traffic data from Prometheus for pod %s", pod)
 
             res_trans = self.fetch_prom(query_trans)
             if res_trans:
-                self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
+                # TODO We should divide by 1024 if we want KiB/s (Kibibytes)
+                self.metrics["traffic_out"] += int(float(res_trans[0]["value"][1]) / 1000)
             else:
                 logger.warning("No transmit traffic data from Prometheus for pod %s", pod)
 
@@ -99,9 +102,9 @@ class RedisDeployment(Deployment):
             if redis_processed != 0:
                 self.metrics["latency"] = float(f"{redis_duration / redis_processed:.3f}")
             else:
-                logger.debug("redis_processed is 0 for %s, using raw duration as latency", 
+                logger.debug("redis_processed is 0 for %s, setting latency to 0.0",
                              self.name)
-                self.metrics["latency"] = float(f"{redis_duration:.3f}")
+                self.metrics["latency"] = 0.0
 
     def update_desired_replicas(self) -> None:
         # TODO: here can happen ZeroDivisionError (cpu_request/mem_request or threshold is 0)

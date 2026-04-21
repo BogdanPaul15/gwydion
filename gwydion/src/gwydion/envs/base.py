@@ -20,6 +20,7 @@ from gwydion.simulation import build_simulation_strategies
 from gwydion.utils import save_episode_stats
 
 logger = logging.getLogger(__name__)
+logging.disable(logging.ERROR)
 
 class BaseEnv(gym.Env):
     """Abstract Base Class for Kubernetes Horizontal Auto-scaling Environments.
@@ -124,7 +125,7 @@ class BaseEnv(gym.Env):
         self.observation_space: spaces.Box = None # type: ignore
 
         # TODO: modify the path where obs and results file are saved
-        self.obs_file = f"{self.name}_observations.csv"
+        self.obs_file = f"{self.name}_observations_corrected_v2.csv"
         self.file_results = "results.csv"
 
         # TODO add in docstring
@@ -134,7 +135,7 @@ class BaseEnv(gym.Env):
             self._load_dataset()
 
             strategy_cfg = env_cfg.get("simulation_strategy", {"type": "default"})
-            self.simulation_strategy = build_simulation_strategies(strategy_cfg)
+            self.simulation_strategy = build_simulation_strategies(strategy_cfg, df=self.df, deployment_names=self.deployments_names)
 
         logger.info("Environment: %s | Mode: %s | Strategy: %s | Steps per episode: %d",
             self.name, "K8s" if self.k8s else "Simulation",
@@ -179,7 +180,7 @@ class BaseEnv(gym.Env):
             # Get namespace from the first deployment in the list
             namespace = self.deployment_list[0].namespace
             base_dir = Path(__file__).resolve().parents[3]
-            path = base_dir / "datasets" / "real" / namespace / "v1" / f"{self.name}_observation.csv"
+            path = base_dir / "datasets" / "real" / namespace / "v1" / f"{self.name}_observation_corrected_v2.csv"
             logger.debug("Loading dataset from %s", path)
 
             try:
@@ -288,7 +289,7 @@ class BaseEnv(gym.Env):
         self.info = {
             "reward": f"{self.total_reward:.2f}",
             'avg_pods': f"{mean(self.avg_pods):.3f}",
-            'avg_latency': f"{mean(self.avg_latency):.3f}",
+            'avg_latency': f"{np.mean(self.avg_latency):.3f}",
             'executionTime': f"{self.execution_time:.3f}"
         }
 
@@ -304,14 +305,14 @@ class BaseEnv(gym.Env):
         if self.current_step == self.max_steps:
             self.episode_count += 1
             self.execution_time = time.time() - self.time_start
-            self.save_obs_to_csv()
+            # self.save_obs_to_csv()
             save_episode_stats(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),
                         self.total_reward, self.execution_time)
             logger.info("="*100)
             logger.info("EPISODE END: %d | Steps: %d | Reward: %.2f | Avg Pods: %.2f | Avg Latency: %.3f | Time: %.2fs",
                         self.episode_count, self.current_step, self.total_reward,
                         mean(self.avg_pods) if self.avg_pods else 0.0,
-                        mean(self.avg_latency) if self.avg_latency else 0.0,
+                        np.mean(self.avg_latency) if self.avg_latency else 0.0,
                         self.execution_time)
             logger.info("="*100)
 

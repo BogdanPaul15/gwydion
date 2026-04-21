@@ -37,4 +37,4 @@ def build_simulation_strategies(cfg: dict, **kwargs: Any) -> SimulationStrategy:
             f"Registered strategies are: {registered}"
         )
 
-    return cls(**kwargs)
+    return cls(config=cfg, **kwargs)
