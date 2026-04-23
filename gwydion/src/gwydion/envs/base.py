@@ -74,14 +74,17 @@ class BaseEnv(gym.Env):
         df (Optional[pd.DataFrame]): The primary dataset containing historical observations metrics
             (e.g., CPU, memory, traffic) used to drive the simulation.
     """
-    def __init__(self, config_path: str, reward_strategy: RewardStrategy):
+    def __init__(self, config_path: str, reward_strategy: RewardStrategy, seed: Optional[int] = None):
         """Initializes the BaseEnv with scaling constraints and core attributes.
 
         Args:
             config_path (str): 
             reward_strategy (RewardStrategy): The reward objective function.
+            seed (Optional[int]): TODO
         """
         super().__init__()
+        # TODO add docstring
+        self.seed = seed
 
         self._cfg = self._load_config(config_path)
         self._deployments_cfgs = self._cfg["deployments"]
@@ -125,7 +128,7 @@ class BaseEnv(gym.Env):
         self.observation_space: spaces.Box = None # type: ignore
 
         # TODO: modify the path where obs and results file are saved
-        self.obs_file = f"{self.name}_observations_corrected_v2.csv"
+        self.obs_file = f"{self.name}_observation.csv"
         self.file_results = "results.csv"
 
         # TODO add in docstring
@@ -135,7 +138,7 @@ class BaseEnv(gym.Env):
             self._load_dataset()
 
             strategy_cfg = env_cfg.get("simulation_strategy", {"type": "default"})
-            self.simulation_strategy = build_simulation_strategies(strategy_cfg, df=self.df, deployment_names=self.deployments_names)
+            self.simulation_strategy = build_simulation_strategies(strategy_cfg, seed, df=self.df, deployment_names=self.deployments_names)
 
         logger.info("Environment: %s | Mode: %s | Strategy: %s | Steps per episode: %d",
             self.name, "K8s" if self.k8s else "Simulation",
@@ -180,7 +183,7 @@ class BaseEnv(gym.Env):
             # Get namespace from the first deployment in the list
             namespace = self.deployment_list[0].namespace
             base_dir = Path(__file__).resolve().parents[3]
-            path = base_dir / "datasets" / "real" / namespace / "v1" / f"{self.name}_observation_corrected_v2.csv"
+            path = base_dir / "datasets" / "real" / namespace / "v2" / f"{self.name}_observation.csv"
             logger.debug("Loading dataset from %s", path)
 
             try:
@@ -341,8 +344,8 @@ class BaseEnv(gym.Env):
 
         if self._actions[action].is_noop:
             self.none_counter += 1
-        else:
-            self.none_counter = 0
+        # else:
+        #     self.none_counter = 0
 
         logger.debug("[Step: %d] | Action: %s | Deployment: %s | None counter: %d",
                      self.current_step, self._actions[action].label,

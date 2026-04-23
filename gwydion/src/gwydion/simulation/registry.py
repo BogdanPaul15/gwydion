@@ -1,4 +1,4 @@
-from typing import Type, Any
+from typing import Type, Any, Optional
 from .base import SimulationStrategy
 
 _REGISTRY: dict[str, Type[SimulationStrategy]] = {}
@@ -25,7 +25,7 @@ def register(name: str):
         return cls
     return decorator
 
-def build_simulation_strategies(cfg: dict, **kwargs: Any) -> SimulationStrategy:
+def build_simulation_strategies(cfg: dict, seed: Optional[int] = None, **kwargs: Any) -> SimulationStrategy:
     """TODO"""
     strategy_type = cfg["type"]
     cls = _REGISTRY.get(strategy_type)
@@ -37,4 +37,7 @@ def build_simulation_strategies(cfg: dict, **kwargs: Any) -> SimulationStrategy:
             f"Registered strategies are: {registered}"
         )
 
-    return cls(config=cfg, **kwargs)
+    strategy = cls(config=cfg, **kwargs)
+    strategy.seed(seed)
+
+    return strategy
