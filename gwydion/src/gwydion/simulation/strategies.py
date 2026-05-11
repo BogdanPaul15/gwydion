@@ -1,5 +1,8 @@
 import logging
 
+from typing import List
+from collections import defaultdict
+
 import pandas as pd
 import numpy as np
 
@@ -27,7 +30,7 @@ class DefaultSimulationStrategy(SimulationStrategy):
     def __init__(self, **kwargs):
         super().__init__()
 
-    def update(self, env) -> None:
+    def update(self, env, _action) -> None:
         if env.current_step == 1:
             sample = self._sample(env.df)
             self._write_sample_to_deployments(env, sample)
@@ -77,17 +80,16 @@ class ActionAwareSimulationStrategy(SimulationStrategy):
     def __init__(self, **kwargs):
         super().__init__()
 
-    def update(self, env) -> None:
+    def update(self, env, action) -> None:
         if env.current_step == 1:
             sample = self._sample(env.df)
             self._write_sample_to_deployments(env, sample)
             return
 
-        deltas = [abs(d.num_pods - d.num_previous_pods) for d in env.deployment_list]
-        action_num = deltas.index(max(deltas)) if any(deltas) else 0
+        deployment_id, _action_id = env._action_adapter.decode(action)
 
-        action_name = env.deployments_names[action_num]
-        action_dep = env.deployment_list[action_num]
+        action_name = env.deployments_names[deployment_id]
+        action_dep = env.deployment_list[deployment_id]
 
         # Acted deployment pod count only
         data = env.df.loc[env.df[f"{action_name}_num_pods"] == action_dep.num_pods]
@@ -98,7 +100,7 @@ class ActionAwareSimulationStrategy(SimulationStrategy):
             return
 
         # Try matching all other deployments on pod count
-        others = [i for i in range(env.num_apps) if i != action_num]
+        others = [i for i in range(env.num_apps) if i != deployment_id]
         other_matched = data
 
         for i in others:
@@ -108,40 +110,32 @@ class ActionAwareSimulationStrategy(SimulationStrategy):
             if len(filtered) > 0:
                 other_matched = filtered
 
+        diff_action = action_dep.num_pods - action_dep.num_previous_pods
+
         if len(other_matched) == len(data):
             # No other deployment pod count matched — branch 1
             # try diff_action only
-            diff_action = action_dep.num_pods - action_dep.num_previous_pods
             with_diff = data.loc[data[f"diff-{action_name}"] == diff_action]
             sample_set = with_diff if len(with_diff) > 0 else data
         else:
             # Branch 2: other pods matched — now try diffs
             both_pods = other_matched
-            diff_action = action_dep.num_pods - action_dep.num_previous_pods
             with_diff_action = both_pods.loc[both_pods[f"diff-{action_name}"] == diff_action]
 
-            if len(with_diff_action) == 0:
-                # try diff_other on each other deployment
-                candidate = both_pods
-                for i in others:
-                    name = env.deployments_names[i]
-                    dep = env.deployment_list[i]
-                    diff_other = dep.num_pods - dep.num_previous_pods
-                    filtered = candidate.loc[candidate[f"diff-{name}"] == diff_other]
-                    if len(filtered) > 0:
-                        candidate = filtered
-                sample_set = candidate if len(candidate) < len(both_pods) else both_pods
-            else:
-                # try diff_other on each other deployment
-                candidate = with_diff_action
-                for i in others:
-                    name = env.deployments_names[i]
-                    dep = env.deployment_list[i]
-                    diff_other = dep.num_pods - dep.num_previous_pods
-                    filtered = candidate.loc[candidate[f"diff-{name}"] == diff_other]
-                    if len(filtered) > 0:
-                        candidate = filtered
-                sample_set = candidate if len(candidate) < len(with_diff_action) else with_diff_action
+            # Start with the tightest constraint possible (preferring with_diff_action if valid)
+            candidate = with_diff_action if len(with_diff_action) > 0 else both_pods
+
+            # try diff_other on each other deployment
+            for i in others:
+                name = env.deployments_names[i]
+                dep = env.deployment_list[i]
+                diff_other = dep.num_pods - dep.num_previous_pods
+
+                filtered = candidate.loc[candidate[f"diff-{name}"] == diff_other]
+                if len(filtered) > 0:
+                    candidate = filtered
+
+            sample_set = candidate
 
         sample = self._sample(sample_set)
         self._write_sample_to_deployments(env, sample)
@@ -247,7 +241,7 @@ class KNNSimulationStrategy(SimulationStrategy):
         chosen_idx = self.rng.choice(indices, p=probabilities)
         return env.df.iloc[chosen_idx]
 
-    def update(self, env) -> None:
+    def update(self, env, action) -> None:
         if env.current_step == 1:
             sample = self._sample(env.df)
             self._write_sample_to_deployments(env, sample)

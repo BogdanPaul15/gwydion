@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 
 import time
 from pathlib import Path
@@ -6,6 +6,7 @@ from datetime import datetime
 from statistics import mean
 import logging
 import yaml
+import urllib3
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,8 @@ from gwydion.utils import save_episode_stats
 
 logger = logging.getLogger(__name__)
 logging.disable(logging.ERROR)
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class BaseEnv(gym.Env):
     """Abstract Base Class for Kubernetes Horizontal Auto-scaling Environments.
@@ -88,22 +91,24 @@ class BaseEnv(gym.Env):
 
         self._cfg = self._load_config(config_path)
         self._deployments_cfgs = self._cfg["deployments"]
-        env_cfg = self._cfg["env"]
+        self._env_cfg = self._cfg["env"]
         actions_cfg = self._cfg["env"]["actions"]
 
-        self.k8s = env_cfg["k8s"]
-        self.name = env_cfg["name"]
+        self.k8s = self._env_cfg["k8s"]
+        self.name = self._env_cfg["name"]
         self.num_apps = len(self._deployments_cfgs)
         self.deployments_names = [d["name"] for d in self._deployments_cfgs]
-        self.deployment_list = build_deployment_list(self._deployments_cfgs, self.k8s)
+        self.deployment_list = build_deployment_list(self._deployments_cfgs, self.k8s, 
+                                                     self._env_cfg["host"], self._env_cfg["token"],
+                                                     self._env_cfg["prometheus_url"])
         self.reward_strategy = reward_strategy
-        self.waiting_period = env_cfg["waiting_period"]
-        self.__version__ = env_cfg["version"]
+        self.waiting_period = self._env_cfg["waiting_period"]
+        self.__version__ = self._env_cfg["version"]
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
 
-        self.max_steps = env_cfg["max_steps"]
+        self.max_steps = self._env_cfg["max_steps"]
         self.current_step = 0
         self.episode_count = 0
         self.terminated = False
@@ -121,7 +126,7 @@ class BaseEnv(gym.Env):
         self._actions = build_action_set(actions_cfg)
         self.num_actions = len(self._actions)
         # TODO: add docstrings
-        space_type = env_cfg["action_space_type"]
+        space_type = self._env_cfg["action_space_type"]
         self._action_adapter = build_action_space(space_type, self.num_apps, self.num_actions)
         self.action_space = self._action_adapter.gym_space
         self.action_stats = [0 for _ in range(self.num_actions)]
@@ -137,7 +142,7 @@ class BaseEnv(gym.Env):
         if not self.k8s:
             self._load_dataset()
 
-            strategy_cfg = env_cfg.get("simulation_strategy", {"type": "default"})
+            strategy_cfg = self._env_cfg.get("simulation_strategy", {"type": "default"})
             self.simulation_strategy = build_simulation_strategies(strategy_cfg, seed, df=self.df, deployment_names=self.deployments_names)
 
         logger.info("Environment: %s | Mode: %s | Strategy: %s | Steps per episode: %d",
@@ -234,7 +239,9 @@ class BaseEnv(gym.Env):
 
         self.episode_buffer = []
 
-        self.deployment_list = build_deployment_list(self._deployments_cfgs, self.k8s)
+        self.deployment_list = build_deployment_list(self._deployments_cfgs, self.k8s, 
+                                                     self._env_cfg["host"], self._env_cfg["token"],
+                                                     self._env_cfg["prometheus_url"])
 
         for deployment in self.deployment_list:
             deployment.initialize_metrics()
@@ -275,9 +282,9 @@ class BaseEnv(gym.Env):
                 time.sleep(self.waiting_period)
 
             for d in self.deployment_list:
-                d.update_k8s_obs()
+                d.update_obs_k8s()
         else:
-            self.simulation_strategy.update(self)
+            self.simulation_strategy.update(self, action)
 
         reward = self.reward
 

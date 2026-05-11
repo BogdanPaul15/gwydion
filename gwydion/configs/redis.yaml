@@ -2,12 +2,12 @@ env:
   name: redis_gym
   version: 0.0.1
   k8s: False
+  host: "YOUR_K8S_CLUSTER_IP_HERE"
+  token: "YOUR_SERVICE_ACCOUNT_TOKEN_HERE"
+  prometheus_url: "YOUR_PROMETHEUS_URL_HERE"
   max_steps: 25
   waiting_period: 5
   target_id: 0
-
-  simulation_strategy:
-    type: default
 
   action_space_type: multi_discrete
   actions:
@@ -58,7 +58,7 @@ deployments:
     scaling:
       cpu_weight: 0.7
       mem_weight: 0.3
-      threshold: 0.75
+      threshold: 0.3
 
   - name: redis-follower
     type: redis
@@ -76,4 +76,4 @@ deployments:
     scaling:
       cpu_weight: 0.7
       mem_weight: 0.3
-      threshold: 0.75
+      threshold: 0.1

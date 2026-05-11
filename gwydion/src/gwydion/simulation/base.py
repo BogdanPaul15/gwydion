@@ -21,7 +21,7 @@ class SimulationStrategy(ABC):
         return df.iloc[idx]
 
     @abstractmethod
-    def update(self, env) -> None:
+    def update(self, env, action) -> None:
         """Perform one simulation step, and update env.deployment_list metrics.
 
         Args:
