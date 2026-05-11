@@ -315,7 +315,7 @@ class BaseEnv(gym.Env):
         if self.current_step == self.max_steps:
             self.episode_count += 1
             self.execution_time = time.time() - self.time_start
-            # self.save_obs_to_csv()
+            self.save_obs_to_csv()
             save_episode_stats(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),
                         self.total_reward, self.execution_time)
             logger.info("="*100)
