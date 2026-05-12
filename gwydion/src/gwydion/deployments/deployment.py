@@ -213,7 +213,7 @@ class Deployment(ABC):
         )
 
         if response.json()["status"] != "success":
-            logger.error("Prometheus query failed for %s: %s", self.name, 
+            logger.error("Prometheus query failed for %s: %s", self.name,
                          response.json().get("error", ""))
             raise RuntimeError(f"Prometheus error: {response.json()['status']} \
                                - {response.json().get('error', '')}")

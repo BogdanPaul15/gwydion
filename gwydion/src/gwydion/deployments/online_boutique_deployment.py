@@ -56,8 +56,8 @@ class OnlineBoutiqueDeployment(Deployment):
         queries = {
             "cpu_usage": f"sum(irate(container_cpu_usage_seconds_total{{{base}}}[5m]))",
             "mem_usage": f"sum(container_memory_working_set_bytes{{{base}}})",
-            # "traffic_in": f"sum(irate(container_network_receive_bytes_total{{{base}}}[5m]))",
-            # "traffic_out": f"sum(irate(container_network_transmit_bytes_total{{{base}}}[5m]))",
+            "traffic_in": f"sum(irate(container_network_receive_bytes_total{{{base}}}[5m]))",
+            "traffic_out": f"sum(irate(container_network_transmit_bytes_total{{{base}}}[5m]))",
         }
 
         transforms = {

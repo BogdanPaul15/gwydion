@@ -132,10 +132,11 @@ class OnlineBoutique(BaseEnv):
             idx = i * 6
             row_data.update({
                 f"{d.name}_num_pods": int(obs[idx]),
-                f"{d.name}_cpu_usage": int(obs[idx + 1]),
-                f"{d.name}_mem_usage": int(obs[idx + 2]),
-                f"{d.name}_traffic_in": int(obs[idx + 3]),
-                f"{d.name}_traffic_out": int(obs[idx + 4])
+                f"{d.name}_desired_replicas": int(obs[idx + 1]),
+                f"{d.name}_cpu_usage": int(obs[idx + 2]),
+                f"{d.name}_mem_usage": int(obs[idx + 3]),
+                f"{d.name}_traffic_in": int(obs[idx + 4]),
+                f"{d.name}_traffic_out": int(obs[idx + 5])
             })
         self.episode_buffer.append(row_data)
 
@@ -151,6 +152,7 @@ class OnlineBoutique(BaseEnv):
             for d in self.deployment_list:
                 fields.extend([
                     f"{d.name}_num_pods",
+                    f"{d.name}_desired_replicas",
                     f"{d.name}_cpu_usage",
                     f"{d.name}_mem_usage",
                     f"{d.name}_traffic_in",
