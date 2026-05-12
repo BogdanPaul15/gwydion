@@ -32,6 +32,7 @@ class BaseEnv(gym.Env):
     environments controlling pod replication in a K8s cluster or simulation.
 
     Attributes:
+        seed (Optional[int]): The random seed used to ensure reproducibility across episodes.
         _cfg (dict): The raw configuration dictionary parsed from the YAML file.
         _deployment_cfgs (List[dict]): List of raw deployment configurations 
             extracted from the config file.
@@ -68,12 +69,14 @@ class BaseEnv(gym.Env):
         execution_time (float): Total duration (in seconds) taken to complete the current episode.
         _actions (List[Action]): The set of available scaling commands built from config.
         num_actions (int): Total count of possible scaling actions.
+        _action_adapter (ActionSpaceAdapter): Adapter handling the conversion of RL continuous/discrete actions into discrete environment instructions.
         action_space (gym.spaces.MultiDiscrete): A 2-dimensional action vector where the first
             element selects which deployment to scale (0 to num_apps - 1) and the second element
             defines the scaling action to perform (0 to num_actions - 1).
         observation_space (gym.spaces.Box): A multi-dimensional continuous space representing the
             state of the cluster (e.g., current pod counts, traffic)
         file_results (str): A CSV file used to save the episode metrics.
+        episode_buffer (list): A temporary buffer storing metrics or transitions for the current episode before writing to disk.
         df (Optional[pd.DataFrame]): The primary dataset containing historical observations metrics
             (e.g., CPU, memory, traffic) used to drive the simulation.
     """
@@ -81,12 +84,11 @@ class BaseEnv(gym.Env):
         """Initializes the BaseEnv with scaling constraints and core attributes.
 
         Args:
-            config_path (str): 
+            config_path (str): The file path to the YAML configuration file.
             reward_strategy (RewardStrategy): The reward objective function.
-            seed (Optional[int]): TODO
+            seed (Optional[int]): The random seed for reproducibility. Defaults to None.
         """
         super().__init__()
-        # TODO add docstring
         self.seed = seed
 
         self._cfg = self._load_config(config_path)
@@ -125,7 +127,6 @@ class BaseEnv(gym.Env):
 
         self._actions = build_action_set(actions_cfg)
         self.num_actions = len(self._actions)
-        # TODO: add docstrings
         space_type = self._env_cfg["action_space_type"]
         self._action_adapter = build_action_space(space_type, self.num_apps, self.num_actions)
         self.action_space = self._action_adapter.gym_space
@@ -136,7 +137,6 @@ class BaseEnv(gym.Env):
         self.obs_file = f"{self.name}_observation.csv"
         self.file_results = "results.csv"
 
-        # TODO add in docstring
         self.episode_buffer = []
 
         if not self.k8s:
@@ -363,10 +363,27 @@ class BaseEnv(gym.Env):
         """Returns the current reward as computed by the reward strategy."""
         return self.reward_strategy.get_reward(self)
 
-    def get_state(self):
+    def get_state(self) -> np.ndarray:
+        """Returns the current state of the environment.
+        
+        This abstract method must be implemented by subclasses to gather metrics
+        from the Kubernetes cluster or simulation and construct the observation vector.
+
+        Returns:
+            numpy.ndarray: An array representing the current observation of the environment.
+        """
         raise NotImplementedError
 
     def get_observation_space(self) -> spaces.Box:
+        """Defines and returns the observation space for the environment.
+
+        This abstract method must be implemented by subclasses to define the boundaries
+        (high and low limits) and the shape of the state vector.
+
+        Returns:
+            gym.spaces.Box: The continuous multidimensional space representing the 
+                valid bounds of the observations.
+        """
         raise NotImplementedError
 
     def collect_obs(self, obs, date, latency):

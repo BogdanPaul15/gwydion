@@ -9,11 +9,20 @@ class SimulationStrategy(ABC):
     """Base class for all simulation strategies."""
 
     def __init__(self, **kwargs):
-        """TODO"""
+        """Initializes the simulation strategy and its random number generator.
+        
+        Args:
+            **kwargs: Additional keyword arguments that can be passed to configure 
+                specific subclasses.
+        """
         self.rng = np.random.default_rng()
 
     def seed(self, seed: Optional[int] = None) -> None:
-        """TODO"""
+        """Seeds the random number generator for reproducible results.
+
+        Args:
+            seed (Optional[int]): The random seed to use.
+        """
         self.rng = np.random.default_rng(seed)
 
     def _sample(self, df: pd.DataFrame) -> pd.Series:
