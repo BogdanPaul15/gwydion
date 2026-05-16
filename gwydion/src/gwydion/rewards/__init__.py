@@ -1,1 +1,2 @@
-from .rewards import RewardStrategy, CostStrategy, LatencyStrategy
+from .rewards import (RewardStrategy, CostStrategy, SmoothCostStrategy,
+                      LatencyStrategy, MultiObjectiveStrategy)
