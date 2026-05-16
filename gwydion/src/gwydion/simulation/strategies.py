@@ -1,7 +1,7 @@
 import logging
 
+from pathlib import Path
 from typing import List
-from collections import defaultdict
 
 import pandas as pd
 import numpy as np
@@ -10,8 +10,11 @@ from scipy.spatial import KDTree
 
 from .base import SimulationStrategy
 from .registry import register
+from .models import load_simulator_model
 
 logger = logging.getLogger(__name__)
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 @register("default")
 class DefaultSimulationStrategy(SimulationStrategy):
@@ -27,6 +30,7 @@ class DefaultSimulationStrategy(SimulationStrategy):
     It treats all deployments equally, iterating through them in 
     index order.
     """
+
     def __init__(self, **kwargs):
         super().__init__()
 
@@ -72,7 +76,7 @@ class DefaultSimulationStrategy(SimulationStrategy):
             data = env.df
 
         sample = self._sample(data)
-        self._write_sample_to_deployments(env, sample)
+        self._write_metrics_from_sample(env, sample)
 
 @register("action_aware")
 class ActionAwareSimulationStrategy(SimulationStrategy):
@@ -86,7 +90,15 @@ class ActionAwareSimulationStrategy(SimulationStrategy):
             self._write_sample_to_deployments(env, sample)
             return
 
-        deployment_id, _action_id = env._action_adapter.decode(action)
+        # Primary deployment: first one with a non-noop action this step.
+        # Falls back to deployment 0 when every action is a no-op.
+        action_pairs = env._action_adapter.decode(action)
+        primary = next(
+            ((dep_id, act_id) for dep_id, act_id in action_pairs
+             if not env._actions[act_id].is_noop),
+            action_pairs[0],
+        )
+        deployment_id, _ = primary
 
         action_name = env.deployments_names[deployment_id]
         action_dep = env.deployment_list[deployment_id]
@@ -102,6 +114,7 @@ class ActionAwareSimulationStrategy(SimulationStrategy):
         # Try matching all other deployments on pod count
         others = [i for i in range(env.num_apps) if i != deployment_id]
         other_matched = data
+        narrowed = False
 
         for i in others:
             name = env.deployments_names[i]
@@ -109,28 +122,25 @@ class ActionAwareSimulationStrategy(SimulationStrategy):
             filtered = other_matched.loc[other_matched[f"{name}_num_pods"] == dep.num_pods]
             if len(filtered) > 0:
                 other_matched = filtered
+                narrowed = True
 
         diff_action = action_dep.num_pods - action_dep.num_previous_pods
 
-        if len(other_matched) == len(data):
-            # No other deployment pod count matched — branch 1
-            # try diff_action only
+        if not narrowed:
+            # No other deployment pod count matched — try diff on primary only
             with_diff = data.loc[data[f"diff-{action_name}"] == diff_action]
             sample_set = with_diff if len(with_diff) > 0 else data
         else:
-            # Branch 2: other pods matched — now try diffs
-            both_pods = other_matched
-            with_diff_action = both_pods.loc[both_pods[f"diff-{action_name}"] == diff_action]
+            # Other pods matched — tighten with diffs
+            with_diff_action = other_matched.loc[
+                other_matched[f"diff-{action_name}"] == diff_action
+            ]
+            candidate = with_diff_action if len(with_diff_action) > 0 else other_matched
 
-            # Start with the tightest constraint possible (preferring with_diff_action if valid)
-            candidate = with_diff_action if len(with_diff_action) > 0 else both_pods
-
-            # try diff_other on each other deployment
             for i in others:
                 name = env.deployments_names[i]
                 dep = env.deployment_list[i]
                 diff_other = dep.num_pods - dep.num_previous_pods
-
                 filtered = candidate.loc[candidate[f"diff-{name}"] == diff_other]
                 if len(filtered) > 0:
                     candidate = filtered
@@ -138,7 +148,7 @@ class ActionAwareSimulationStrategy(SimulationStrategy):
             sample_set = candidate
 
         sample = self._sample(sample_set)
-        self._write_sample_to_deployments(env, sample)
+        self._write_metrics_from_sample(env, sample)
 
 @register("knn")
 class KNNSimulationStrategy(SimulationStrategy):
@@ -187,10 +197,15 @@ class KNNSimulationStrategy(SimulationStrategy):
         self.col_min = raw.min(axis=0)
         self.col_max = raw.max(axis=0)
         self.col_range = self.col_max - self.col_min
-        self.col_range[self.col_range == 0] = 1.0
+
+        # Constant columns carry no information
+        self.active_mask = self.col_range > 0
+        self.col_range = np.where(self.active_mask, self.col_range, 1.0)
+        effective_weights = np.where(self.active_mask, self.weight_vec, 0.0)
 
         normalized = (raw - self.col_min) / self.col_range
-        self.tree = KDTree(normalized * self.weight_vec)
+        self.tree = KDTree(normalized * effective_weights)
+        self._effective_weights = effective_weights
 
     def _encode_state(self, env) -> np.ndarray:
         """TODO"""
@@ -224,7 +239,7 @@ class KNNSimulationStrategy(SimulationStrategy):
             )
 
         normalized = (raw - self.col_min) / self.col_range
-        return normalized * self.weight_vec
+        return normalized * self._effective_weights
 
     def _query(self, env) -> pd.Series:
         query_vec = self._encode_state(env)
@@ -248,4 +263,4 @@ class KNNSimulationStrategy(SimulationStrategy):
             return
 
         sample = self._query(env)
-        self._write_sample_to_deployments(env, sample)
+        self._write_metrics_from_sample(env, sample)
