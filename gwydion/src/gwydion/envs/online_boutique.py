@@ -44,17 +44,17 @@ class OnlineBoutique(BaseEnv):
         email = self.deployment_list[ID_EMAIL]
         return spaces.Box(
             low=np.array([
-                recommendation.min_pods, 0, 0, 0, 0, 0,
-                productcatalog.min_pods, 0, 0, 0, 0, 0,
-                cartservice.min_pods, 0, 0, 0, 0, 0,
-                adservice.min_pods, 0, 0, 0, 0, 0,
-                paymentservice.min_pods, 0, 0, 0, 0, 0,
-                shippingservice.min_pods, 0, 0, 0, 0, 0,
-                currencyservice.min_pods, 0, 0, 0, 0, 0,
-                rediscart.min_pods, 0, 0, 0, 0, 0,
-                checkoutservice.min_pods, 0, 0, 0, 0, 0,
-                frontend.min_pods, 0, 0, 0, 0, 0,
-                email.min_pods, 0, 0, 0, 0, 0,
+                recommendation.min_pods, recommendation.min_pods, 0, 0, 0, 0,
+                productcatalog.min_pods, productcatalog.min_pods, 0, 0, 0, 0,
+                cartservice.min_pods, cartservice.min_pods, 0, 0, 0, 0,
+                adservice.min_pods, adservice.min_pods, 0, 0, 0, 0,
+                paymentservice.min_pods, paymentservice.min_pods, 0, 0, 0, 0,
+                shippingservice.min_pods, shippingservice.min_pods, 0, 0, 0, 0,
+                currencyservice.min_pods, currencyservice.min_pods, 0, 0, 0, 0,
+                rediscart.min_pods, rediscart.min_pods, 0, 0, 0, 0,
+                checkoutservice.min_pods, checkoutservice.min_pods, 0, 0, 0, 0,
+                frontend.min_pods, frontend.min_pods, 0, 0, 0, 0,
+                email.min_pods, email.min_pods, 0, 0, 0, 0,
                 0,
             ]), high=np.array([
                 recommendation.max_pods, recommendation.max_pods, 1000, 1000, 20000, 20000,
