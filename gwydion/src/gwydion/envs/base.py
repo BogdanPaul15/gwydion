@@ -188,7 +188,8 @@ class BaseEnv(gym.Env):
             # Get namespace from the first deployment in the list
             namespace = self.deployment_list[0].namespace
             base_dir = Path(__file__).resolve().parents[3]
-            path = base_dir / "datasets" / "real" / namespace / "v2" / f"{self.name}_observation.csv"
+            version = self._env_cfg.get("dataset_version", "v2")
+            path = base_dir / "datasets" / "real" / namespace / version / f"{self.name}_observation.csv"
             logger.debug("Loading dataset from %s", path)
 
             try:
@@ -273,12 +274,13 @@ class BaseEnv(gym.Env):
                 episode_over (bool): Whether the episode has reached its maximum steps.
                 info (dict): Additional information about the step.
         """
-        deployment_id, action_id = self._action_adapter.decode(action)
+        action_pairs = self._action_adapter.decode(action)
 
-        self.take_action(deployment_id, action_id)
+        self.take_action(action_pairs)
 
         if self.k8s:
-            if not self._actions[action_id].is_noop and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
+            any_scaling = any(not self._actions[a].is_noop for _, a in action_pairs)
+            if any_scaling and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
                 time.sleep(self.waiting_period)
 
             for d in self.deployment_list:
@@ -328,15 +330,18 @@ class BaseEnv(gym.Env):
 
         return np.array(ob), reward, self.terminated, self.episode_over, self.info
 
-    def take_action(self, deployment_id: int, action: int) -> None:
-        """Executes the specified action on the given deployment.
+    def take_action(self, action_pairs: list[tuple[int, int]]) -> None:
+        """Executes one scaling action per targeted deployment for this step.
 
-        Increments the step counter, updates episode status, tracks action statistics,
-        and invokes the selected action's execute method for the target deployment.
+        Increments the step counter, updates episode status, tracks action
+        statistics, and invokes each selected action's execute method. The step
+        counts as idle only when every action is a no-op; ``none_counter`` is
+        incremented on an idle step and reset as soon as the agent scales,
+        so it measures *consecutive* inactivity.
 
         Args:
-            deployment_id (int): The index of the deployment to be scaled.
-            action (int): The index of the action in the _actions list.
+            action_pairs (list[tuple[int, int]]): The ``(deployment_id, action_id)``
+                pairs to apply this step, as produced by the action adapter.
         """
         self.current_step += 1
 
@@ -346,17 +351,22 @@ class BaseEnv(gym.Env):
         if self.current_step == self.max_steps:
             self.episode_over = True
 
-        self.action_stats[action] += 1
-        self._actions[action].execute(self, deployment_id)
+        step_is_noop = True
+        for deployment_id, action_id in action_pairs:
+            self.action_stats[action_id] += 1
+            self._actions[action_id].execute(self, deployment_id)
+            if not self._actions[action_id].is_noop:
+                step_is_noop = False
 
-        if self._actions[action].is_noop:
+        if step_is_noop:
             self.none_counter += 1
-        # else:
-        #     self.none_counter = 0
+        else:
+            self.none_counter = 0
 
-        logger.debug("[Step: %d] | Action: %s | Deployment: %s | None counter: %d",
-                     self.current_step, self._actions[action].label,
-                     self.deployment_list[deployment_id].name, self.none_counter)
+        logger.debug("[Step: %d] | Actions: %s | None counter: %d",
+                     self.current_step,
+                     [self._actions[a].label for _, a in action_pairs],
+                     self.none_counter)
 
     @property
     def reward(self) -> float:
