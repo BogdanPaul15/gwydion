@@ -37,8 +37,9 @@ def sample_a2c_params(trial: optuna.Trial) -> dict:
         "activation_fn":         activation_fn,
     }
 
-def convert_a2c_params(sampled: dict[str, Any]) -> dict[str, Any]:
+def convert_a2c_params(sampled: dict[str, Any], n_envs: int = 1) -> dict[str, Any]:
     """Translate raw sample_a2c_params() dict into A2C(**kwargs)."""
+    del n_envs
     hyperparams = sampled.copy()
 
     hyperparams["n_steps"] = 2 ** hyperparams.pop("n_steps_pow")

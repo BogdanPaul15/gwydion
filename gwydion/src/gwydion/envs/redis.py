@@ -1,6 +1,3 @@
-import csv
-from pathlib import Path
-
 import numpy as np
 from gymnasium import spaces
 
@@ -86,49 +83,3 @@ class Redis(BaseEnv):
             # follower.mem_forecast, # MEM forecast (in MiB)
             self.none_counter,
         ], dtype=np.float32)
-
-    def collect_obs(self, obs, date, latency):
-        row_data = {
-            "date": date,
-            "redis-leader_latency": float(f"{latency:.3f}")
-        }
-
-        for i, d in enumerate(self.deployment_list):
-            idx = i * 6
-            row_data.update({
-                f"{d.name}_num_pods": int(obs[idx]),
-                f"{d.name}_desired_replicas": int(obs[idx + 1]),
-                f"{d.name}_cpu_usage": int(obs[idx + 2]),
-                f"{d.name}_mem_usage": int(obs[idx + 3]),
-                f"{d.name}_traffic_in": int(obs[idx + 4]),
-                f"{d.name}_traffic_out": int(obs[idx + 5])
-            })
-        self.episode_buffer.append(row_data)
-
-    def save_obs_to_csv(self):
-        if not self.episode_buffer:
-            return
-
-        obs_file = self.obs_file
-        file_exists = Path(obs_file).exists()
-
-        with open(obs_file, "a+", encoding="utf-8", newline="") as f:
-            fields = ["date"]
-            for d in self.deployment_list:
-                fields.extend([
-                    f"{d.name}_num_pods",
-                    f"{d.name}_desired_replicas",
-                    f"{d.name}_cpu_usage",
-                    f"{d.name}_mem_usage",
-                    f"{d.name}_traffic_in",
-                    f"{d.name}_traffic_out",
-                ])
-            fields.append("redis-leader_latency")
-
-            writer = csv.DictWriter(f, fieldnames=fields)
-            if not file_exists:
-                writer.writeheader()
-
-            writer.writerows(self.episode_buffer)
-
-        self.episode_buffer = []

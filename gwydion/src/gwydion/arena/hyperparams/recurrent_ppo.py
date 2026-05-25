@@ -17,6 +17,7 @@ def sample_recurrent_ppo_params(trial: optuna.Trial) -> dict:
 
 def convert_recurrent_ppo_params(sampled: dict[str, Any], n_envs: int = 1) -> dict[str, Any]:
     """Translate raw sample_recurrent_ppo_params() dict into RecurrentPPO(**kwargs)."""
+    sampled = sampled.copy()
     lstm_hidden_size   = sampled.pop("lstm_hidden_size")
     n_lstm_layers      = sampled.pop("n_lstm_layers")
     enable_critic_lstm = sampled.pop("enable_critic_lstm")

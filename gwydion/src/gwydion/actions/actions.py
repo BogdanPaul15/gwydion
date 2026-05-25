@@ -66,7 +66,7 @@ class ScaleUp(Action):
 
         if constraint:
             env.constraint_max_pod_replicas = True
-            logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
+            logger.debug("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
                         env.current_step, self.label, deployment.name, deployment.max_pods)
 
     def can_execute(self, env, deployment_id: int) -> bool:
@@ -92,7 +92,7 @@ class ScaleDown(Action):
 
         if constraint:
             env.constraint_min_pod_replicas = True
-            logger.warning("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
+            logger.debug("[Step: %d] | Action: %s FAILED for %s (Limit: %s)",
                         env.current_step, self.label, deployment.name, deployment.min_pods)
 
     def can_execute(self, env, deployment_id: int) -> bool:
