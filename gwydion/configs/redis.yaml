@@ -8,8 +8,12 @@ env:
   max_steps: 25
   waiting_period: 5
   target_id: 0
+  dataset_version: v2
 
-  action_space_type: multi_discrete
+  simulation_strategy:
+    type: action_aware
+
+  action_space_type: vector
   actions:
     - type: do_nothing
     - type: scale_up

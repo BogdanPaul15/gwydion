@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from gwydion.simulation.models import SimulatorModel
+from .utils import build_transitions, delta_columns
 
 logger = logging.getLogger(__name__)
 
@@ -125,15 +126,62 @@ class BaseTrainer(ABC):
 	def to_model(self) -> SimulatorModel:
 		"""Exports the trained model as a runtime :class:`SimulatorModel`."""
 
-	@abstractmethod
-	def predict_test(self) -> Tuple[np.ndarray, np.ndarray, pd.DatetimeIndex]:
-		"""One-step-ahead predictions on every test-split row.
+	def rollout(self, n_steps: int = None) -> Tuple[np.ndarray, np.ndarray, pd.DatetimeIndex]:
+		"""Autoregressive rollout on the test split using real action deltas.
+
+		Seeds from the last ``required_history`` real rows before the test
+		boundary, then chains ``model.predict_next`` calls, substituting
+		predicted targets back into the state vector at each step while keeping
+		real pod counts from the dataset.
+
+		Args:
+			n_steps: Rollout length. Defaults to the full test split length.
 
 		Returns:
-			Tuple: ``(y_pred, y_true, dates)`` where ``y_pred`` and ``y_true``
-				are ``(N, n_target)`` arrays and ``dates`` is a DatetimeIndex of
-				length ``N`` giving the timestamp of each *predicted* value.
+			Tuple: ``(y_pred, y_true, dates)`` — each of shape ``(N, n_targets)``
+				plus a DatetimeIndex of length ``N``.
 		"""
+		model = self.to_model()
+		history_len = model.required_history
+
+		transitions = build_transitions(self.deployment_names, self.df)
+		states  = transitions[self.state_features].to_numpy(dtype=np.float64)
+		deltas  = transitions[delta_columns(self.deployment_names)].to_numpy(dtype=np.float64)
+		targets = transitions[self.target_features].to_numpy(dtype=np.float64)
+		trans_dates = pd.to_datetime(transitions["date"])
+
+		test_start = pd.to_datetime(self.test_df["date"].min())
+		i_val = int((trans_dates >= test_start).idxmax())
+
+		if n_steps is None:
+			n_steps = len(transitions) - i_val - 1
+
+		# Seed includes i_val itself so history[-1] is the state at the test boundary,
+		# matching how the model sees "current state at t" during training.
+		history = list(states[max(0, i_val - history_len + 1): i_val + 1])
+		target_in_state = [self.state_features.index(f) for f in self.target_features]
+
+		y_pred, y_true, pred_dates = [], [], []
+		for step in range(n_steps):
+			t = i_val + step
+			if t + 1 >= len(transitions):
+				break
+
+			pred = model.predict_next(
+				np.array(history[-history_len:], dtype=np.float64), deltas[t])
+
+			y_pred.append(pred)
+			y_true.append(targets[t + 1])
+			pred_dates.append(trans_dates.iloc[t + 1])
+
+			next_state = states[t + 1].copy()
+			for pred_i, state_i in enumerate(target_in_state):
+				next_state[state_i] = pred[pred_i]
+			history.append(next_state)
+
+		return (np.asarray(y_pred, dtype=np.float64),
+				np.asarray(y_true, dtype=np.float64),
+				pd.DatetimeIndex(pred_dates))
 
 	def save(self, path: Path) -> None:
 		"""Exports and persists the trained model as an artifact directory.

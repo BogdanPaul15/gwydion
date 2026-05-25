@@ -158,6 +158,7 @@ class KNNSimulationStrategy(SimulationStrategy):
     built from the historical dataset, and samples from the k nearest
     neighbors weighted by inverse distance. 
     """
+
     def __init__(self, **kwargs):
         """TODO"""
         super().__init__(**kwargs)
@@ -264,3 +265,107 @@ class KNNSimulationStrategy(SimulationStrategy):
 
         sample = self._query(env)
         self._write_metrics_from_sample(env, sample)
+
+@register("learned")
+class LearnedSimulationStrategy(SimulationStrategy):
+    """Model-driven simulation strategy.
+
+    Instead of sampling the historical dataset, this strategy drives the
+    environment with an offline-trained transition model (a
+    :class:`~gwydion.simulation.models.SimulatorModel`). The first step seeds a
+    random real state from the dataset; every subsequent step predicts the next
+    resource metrics from the recent state history and the agent's scaling
+    action, then feeds the prediction back in — an autoregressive rollout.
+
+    Pod counts stay owned by the agent's action: only resource metrics are
+    predicted and written, after which ``desired_replicas`` is recomputed.
+    """
+
+    def __init__(self, **kwargs):
+        """Loads the pretrained model and prepares state-vector bookkeeping.
+
+        Args:
+            **kwargs: Must contain ``df`` (historical dataset, for seeding),
+                ``deployment_names`` and ``config`` (with a ``model_path`` key).
+        """
+        super().__init__(**kwargs)
+
+        config = kwargs.get("config", {})
+        self.df = kwargs.get("df")
+        self.deployments = kwargs.get("deployment_names", [])
+
+        if self.df is None:
+            raise ValueError("LearnedSimulationStrategy requires a 'df' in kwargs.")
+
+        model_path = config.get("model_path")
+        if not model_path:
+            raise ValueError(
+                "LearnedSimulationStrategy requires 'model_path' in the "
+                "simulation_strategy config block."
+            )
+        resolved = Path(model_path)
+        if not resolved.is_absolute():
+            resolved = _PROJECT_ROOT / resolved
+        self.model = load_simulator_model(resolved)
+        logger.info("Loaded '%s' simulator model from %s", self.model.model_type, resolved)
+
+        # Map each model state feature to a (deployment index, feature name) pair.
+        self._state_spec = []
+        for col in self.model.state_features:
+            owner = max((n for n in self.deployments if col.startswith(f"{n}_")),
+                        key=len, default=None)
+            if owner is None:
+                raise ValueError(f"State feature '{col}' matches no known deployment.")
+            self._state_spec.append((self.deployments.index(owner), col[len(owner) + 1:]))
+
+        self._history: List[np.ndarray] = []
+        self._prev_pods: List[int] = []
+
+    def _state_vec_from_row(self, row: pd.Series) -> np.ndarray:
+        """Builds a model state vector from a dataset row."""
+        return np.array([float(row[col]) for col in self.model.state_features],
+                        dtype=np.float64)
+
+    def _state_vec_from_env(self, env) -> np.ndarray:
+        """Builds a model state vector from the live deployment state."""
+        values = []
+        for dep_idx, feature in self._state_spec:
+            d = env.deployment_list[dep_idx]
+            if feature == "num_pods":
+                values.append(float(d.num_pods))
+            elif feature == "desired_replicas":
+                values.append(float(d.desired_replicas))
+            else:
+                values.append(float(d.metrics.get(feature, 0.0)))
+        return np.array(values, dtype=np.float64)
+
+    def _seed_initial_state(self, env) -> None:
+        """Seeds the rollout from a random contiguous slice of real observations."""
+        history_len = self.model.required_history
+        start = int(self.rng.integers(0, len(self.df) - history_len + 1))
+        window = self.df.iloc[start:start + history_len]
+
+        self._write_sample_to_deployments(env, window.iloc[-1])
+        self._history = [self._state_vec_from_row(window.iloc[k])
+                         for k in range(history_len)]
+        self._prev_pods = [d.num_pods for d in env.deployment_list]
+
+    def update(self, env, action) -> None:
+        if env.current_step == 1:
+            self._seed_initial_state(env)
+            return
+
+        # Actual per-deployment pod delta applied this step (handles constraints).
+        action_delta = np.array(
+            [env.deployment_list[i].num_pods - self._prev_pods[i]
+             for i in range(env.num_apps)], dtype=np.float64)
+
+        history_len = self.model.required_history
+        history = np.array(self._history[-history_len:], dtype=np.float64)
+
+        prediction = self.model.predict_next(history, action_delta)
+        predicted = dict(zip(self.model.target_features, prediction))
+        self._write_metrics_to_deployments(env, predicted)
+
+        self._history.append(self._state_vec_from_env(env))
+        self._prev_pods = [d.num_pods for d in env.deployment_list]

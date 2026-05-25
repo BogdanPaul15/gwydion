@@ -1,0 +1,51 @@
+training:
+  dataset: datasets/real/redis/v2/redis_gym_observation.csv
+  split:
+    train: 0.70
+    val: 0.15
+
+  models:
+    lgbm:
+      scheduled_sampling_rounds: 5
+      scheduled_sampling_ratio: 0.75
+      defaults: {}
+
+    lstm:
+      window: 16
+      defaults:
+        hidden_size: 64
+        num_layers: 1
+        dropout: 0.1
+        lr: 0.001
+        batch_size: 256
+        epochs: 60
+        tune_epochs: 15
+        patience: 8
+
+    varima:
+      defaults:
+        p: 2
+        trend: c
+        eval_stride: 5
+        test_samples: 500
+
+deployments:
+  - name: redis-leader
+    state_features: &state_features
+      - "num_pods"
+      - "desired_replicas"
+      - "cpu_usage"
+      - "mem_usage"
+      - "traffic_in"
+      - "traffic_out"
+      - "latency"
+    target_features: &target_features
+      - "cpu_usage"
+      - "mem_usage"
+      - "traffic_in"
+      - "traffic_out"
+      - "latency"
+
+  - name: redis-follower
+    state_features: *state_features
+    target_features: *target_features

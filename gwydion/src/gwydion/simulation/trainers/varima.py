@@ -137,34 +137,6 @@ class VARIMATrainer(BaseTrainer):
 		return self.regression_metrics(np.asarray(y_true), np.asarray(y_pred),
 									   self.target_features)
 
-	def predict_test(self):
-		if self._results is None:
-			raise RuntimeError("Call train() before predict_test().")
-		import pandas as pd
-
-		model = self.to_model()
-		transitions = build_transitions(self.deployment_names, self.test_df)
-		states = transitions[self.state_features].to_numpy(dtype=np.float64)
-		deltas = transitions[delta_columns(self.deployment_names)].to_numpy(dtype=np.float64)
-		targets = transitions[self.target_features].to_numpy(dtype=np.float64)
-		dates_arr = transitions["date"].values
-
-		first = model.required_history - 1
-		last = len(transitions) - 2
-		if last < first:
-			raise RuntimeError("Test split too small for the configured lag order.")
-
-		y_pred, y_true, pred_dates = [], [], []
-		for t in range(first, last + 1):
-			window = states[t - model.required_history + 1: t + 1]
-			y_pred.append(model.predict_next(window, deltas[t]))
-			y_true.append(targets[t + 1])
-			pred_dates.append(dates_arr[t + 1])
-
-		return (np.asarray(y_pred, dtype=np.float64),
-				np.asarray(y_true, dtype=np.float64),
-				pd.DatetimeIndex(pred_dates))
-
 	def to_model(self) -> VARIMASimulatorModel:
 		if self._results is None:
 			raise RuntimeError("Call train() before exporting the model.")

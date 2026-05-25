@@ -8,11 +8,12 @@ env:
   max_steps: 25
   waiting_period: 5
   target_id: 9
+  dataset_version: v1
 
   simulation_strategy:
     type: default
 
-  action_space_type: multi_discrete
+  action_space_type: vector
   actions:
     - type: do_nothing
     - type: scale_up

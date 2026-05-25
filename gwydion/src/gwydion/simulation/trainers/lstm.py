@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 
 from gwydion.simulation.models import LSTMSimulatorModel, TransitionLSTM
 from .base import BaseTrainer
-from .utils import make_windows, build_transitions
+from .utils import make_windows
 
 logger = logging.getLogger(__name__)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -184,24 +184,6 @@ class LSTMTrainer(BaseTrainer):
 
 		pred = self._scalers["target"].inverse_transform(scaled)
 		return self.regression_metrics(self._y_test_raw, pred, self.target_features)
-
-	def predict_test(self):
-		if self._module is None:
-			raise RuntimeError("Call train() before predict_test().")
-
-		transitions = build_transitions(self.deployment_names, self.test_df)
-		# y[i] from make_windows corresponds to transitions[window + i], so dates
-		# start at index self.window within the transitions frame.
-		dates = pd.DatetimeIndex(transitions["date"].iloc[self.window:].values)
-
-		seq_te, act_te, _ = self._test
-		self._module.eval()
-		with torch.no_grad():
-			scaled = self._module(seq_te, act_te).cpu().numpy()
-
-		pred = self._scalers["target"].inverse_transform(scaled)
-		dates = dates[: len(pred)]
-		return pred, self._y_test_raw, dates
 
 	def to_model(self) -> LSTMSimulatorModel:
 		if self._module is None:

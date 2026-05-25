@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 import logging
 import warnings
 
@@ -9,9 +9,9 @@ from lightgbm import LGBMRegressor
 from sklearn.multioutput import MultiOutputRegressor
 
 from gwydion.simulation.models import LGBMSimulatorModel
+from gwydion.simulation.utils import compute_temporal_features
 from .base import BaseTrainer
-from .utils import build_tabular_dataset, build_transitions
-from gwydion.simulation.utils import add_temporal_columns, temporal_feature_names
+from .utils import build_tabular_dataset, build_transitions, delta_columns
 
 logger = logging.getLogger(__name__)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -67,6 +67,57 @@ class LGBMTrainer(BaseTrainer):
 		base = LGBMRegressor(verbose=-1, n_jobs=-1, subsample_freq=1, **params)
 		return MultiOutputRegressor(base)
 
+	def _build_scheduled_dataset(self, model: LGBMSimulatorModel,
+								 sampling_prob: float,
+								 rng: np.random.Generator) -> Tuple[np.ndarray, np.ndarray]:
+		"""Builds a tabular training dataset with scheduled sampling.
+
+		Runs through the train+val data sequentially. At each step, with
+		probability ``sampling_prob``, substitutes the model's own prediction
+		from the previous step for the real state. This exposes the model to
+		its own prediction errors during training, reducing distribution shift
+		at rollout time.
+
+		Args:
+			model: The current fitted :class:`LGBMSimulatorModel`.
+			sampling_prob: Probability of using a predicted state instead of the real one.
+			rng: Seeded random generator.
+
+		Returns:
+			Tuple[np.ndarray, np.ndarray]: ``(X, y)`` arrays for retraining.
+		"""
+		trainval_df = (pd.concat([self.train_df, self.val_df])
+					   .sort_values("date").reset_index(drop=True))
+		transitions = build_transitions(self.deployment_names, trainval_df)
+
+		states  = transitions[self.state_features].to_numpy(dtype=np.float64)
+		deltas  = transitions[delta_columns(self.deployment_names)].to_numpy(dtype=np.float64)
+		targets = transitions[self.target_features].to_numpy(dtype=np.float64)
+
+		history_len = model.required_history
+		target_indices = np.array([self.state_features.index(f) for f in self.target_features])
+
+		history = list(states[:history_len])
+		x_rows, y_rows = [], []
+
+		for t in range(history_len - 1, len(transitions) - 1):
+			hist_arr = np.array(history[-history_len:], dtype=np.float64)
+			temporal = compute_temporal_features(hist_arr, target_indices)
+			x_row = np.concatenate([hist_arr[-1], temporal, deltas[t]])
+			x_rows.append(x_row)
+			y_rows.append(targets[t + 1])
+
+			if rng.random() < sampling_prob:
+				pred = model.regressor.predict(x_row.reshape(1, -1))[0]
+				next_state = states[t + 1].copy()
+				next_state[target_indices] = pred
+			else:
+				next_state = states[t + 1].copy()
+
+			history.append(next_state)
+
+		return np.array(x_rows, dtype=np.float64), np.array(y_rows, dtype=np.float64)
+
 	def tune(self, n_trials: int = 50) -> None:
 		study = optuna.create_study(direction="minimize")
 
@@ -104,26 +155,23 @@ class LGBMTrainer(BaseTrainer):
 		self._model.fit(x, y)
 		logger.info("LGBM trained on %d transitions with params: %s", len(x), params)
 
+		ss_rounds = int(self.model_params.get("scheduled_sampling_rounds", 0))
+		ss_ratio  = float(self.model_params.get("scheduled_sampling_ratio", 0.5))
+
+		if ss_rounds > 0:
+			rng = np.random.default_rng(0)
+			for r in range(ss_rounds):
+				ratio = ss_ratio * (r + 1) / ss_rounds
+				x_ss, y_ss = self._build_scheduled_dataset(self.to_model(), ratio, rng)
+				self._model.fit(x_ss, y_ss)
+				logger.info("Scheduled sampling round %d/%d | ratio=%.2f | rows=%d",
+							r + 1, ss_rounds, ratio, len(x_ss))
+
 	def test(self) -> dict:
 		if self._model is None:
 			raise RuntimeError("Call train() before test().")
 		pred = self._model.predict(self.x_test)
 		return self.regression_metrics(self.y_test, pred, self.target_features)
-
-	def predict_test(self):
-		if self._model is None:
-			raise RuntimeError("Call train() before predict_test().")
-
-		transitions = build_transitions(self.deployment_names, self.df)
-		transitions = add_temporal_columns(transitions, self.target_features)
-		transitions = transitions.dropna(
-			subset=temporal_feature_names(self.target_features)
-		).reset_index(drop=True)
-
-		i_val = len(self.x_train) + len(self.x_val)
-		dates = pd.DatetimeIndex(transitions["date"].iloc[1:].values)[i_val:]
-		pred = np.asarray(self._model.predict(self.x_test), dtype=np.float64)
-		return pred, self.y_test, dates
 
 	def to_model(self) -> LGBMSimulatorModel:
 		if self._model is None:
