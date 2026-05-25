@@ -26,7 +26,7 @@ def register(name: str):
         return cls
     return decorator
 
-def build_deployment(cfg: dict, k8s: bool) -> Deployment:
+def build_deployment(cfg: dict, k8s: bool, host: str, token: str, prometheus_url: str) -> Deployment:
     """Instantiates a deployment from a config dict using the registry.
 
     The config dict must contain a 'type' key matching a registered name.
@@ -35,6 +35,9 @@ def build_deployment(cfg: dict, k8s: bool) -> Deployment:
     Args:
         cfg (dict): Deployment configuration dictionary.
         k8s (bool): Whether to connect to a real K8s cluster.
+        host (str): Kubernetes API server host URL.
+        token (str): Authentication token for the k8s API.
+        prometheus_url (str): Endpoint for Prometheus metrics queries.
 
     Returns:
         Deployment: A fully initialized deployment instance.
@@ -52,19 +55,22 @@ def build_deployment(cfg: dict, k8s: bool) -> Deployment:
             f"Registered types are: {registered}"
         )
 
-    return cls.from_config(cfg, k8s)
+    return cls.from_config(cfg, k8s, host, token, prometheus_url)
 
-def build_deployment_list(deployment_cfgs: list[dict], k8s: bool) -> list[Deployment]:
+def build_deployment_list(deployment_cfgs: list[dict], k8s: bool, host: str, token: str, prometheus_url: str) -> list[Deployment]:
     """Builds a full deployment list from a list of config dicts.
 
     Args:
         deployment_cfgs (list[dict]): List of per-deployment config dicts.
         k8s (bool): Whether to connect to a real K8s cluster.
+        host (str): Kubernetes API server host URL.
+        token (str): Authentication token for the k8s API.
+        prometheus_url (str): Endpoint for Prometheus metrics queries.
 
     Returns:
         list[Deployment]: Ordered list of deployment instances.
     """
-    return [build_deployment(cfg, k8s) for cfg in deployment_cfgs]
+    return [build_deployment(cfg, k8s, host, token, prometheus_url) for cfg in deployment_cfgs]
 
 def list_registered() -> list[str]:
     """Returns all currently registered deployment type names.

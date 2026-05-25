@@ -1,0 +1,85 @@
+training:
+  dataset: datasets/real/onlineboutique/v1/online_boutique_gym_observation.csv
+  split:
+    train: 0.70
+    val: 0.15
+
+  models:
+    lgbm:
+      defaults: {}
+
+    lstm:
+      window: 16
+      defaults:
+        hidden_size: 128
+        num_layers: 1
+        dropout: 0.1
+        lr: 0.001
+        batch_size: 256
+        epochs: 60
+        tune_epochs: 15
+        patience: 8
+
+    varima:
+      defaults:
+        p: 2
+        trend: c
+        eval_stride: 5
+        test_samples: 300
+
+deployments:
+  - name: recommendationservice
+    state_features: &state_features
+      - "num_pods"
+      - "desired_replicas"
+      - "cpu_usage"
+      - "mem_usage"
+      - "traffic_in"
+      - "traffic_out"
+      - "latency"
+    target_features: &target_features
+      - "cpu_usage"
+      - "mem_usage"
+      - "traffic_in"
+      - "traffic_out"
+      - "latency"
+
+  - name: productcatalogservice
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: cartservice
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: adservice
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: paymentservice
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: shippingservice
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: currencyservice
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: redis-cart
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: checkoutservice
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: frontend
+    state_features: *state_features
+    target_features: *target_features
+
+  - name: emailservice
+    state_features: *state_features
+    target_features: *target_features

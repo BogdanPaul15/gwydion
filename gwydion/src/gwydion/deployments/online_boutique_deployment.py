@@ -15,8 +15,10 @@ class OnlineBoutiqueDeployment(Deployment):
     """
     def __init__(self, k8s, name, namespace, min_pods, max_pods,
                  cpu_request, cpu_limit, mem_request, mem_limit,
+                 host=None, token=None, prometheus_url=None,
                  cpu_weight=0.7, mem_weight=0.3, threshold=0.75):
-        super().__init__(k8s, name, namespace, min_pods, max_pods)
+        super().__init__(k8s, name, namespace, min_pods, max_pods,
+                         host=host, token=token, prometheus_url=prometheus_url)
 
         self.cpu_request = cpu_request
         self.mem_request = mem_request
@@ -37,69 +39,54 @@ class OnlineBoutiqueDeployment(Deployment):
         self.metrics = {
             "cpu_usage": 0,
             "mem_usage": 0,
-            "received_traffic": 0,
-            "transmit_traffic": 0,
+            "traffic_in": 0,
+            "traffic_out": 0,
             "latency": 0.0,
         }
 
     def collect_metrics(self) -> None:
-        self.metrics["cpu_usage"] = 0
-        self.metrics["mem_usage"] = 0
-        self.metrics["received_traffic"] = 0
-        self.metrics["transmit_traffic"] = 0
-        self.metrics["latency"] = 0.0
+        self.initialize_metrics()
+        self._collect_container_metrics()
+        self._collect_latency()
 
-        # TODO: maybe this part can be aggregated into one query for each metric
-        for pod in self.pod_names:
-            # f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}'}}[5m]))"
-            query_cpu = f"sum(irate(container_cpu_usage_seconds_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
-            # f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}'}}[5m]))""
-            query_mem = f"sum(irate(container_memory_working_set_bytes{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
-            # f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}'}}[5m]))"
-            query_rec = f"sum(irate(container_network_receive_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
-            # f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}'}}[5m]))"
-            query_trans = f"sum(irate(container_network_transmit_bytes_total{{namespace='{self.namespace}', pod='{pod}'}}[5m]))"
+    def _collect_container_metrics(self) -> None:
+        pods_regex = "|".join(self.pod_names)
+        base = f"namespace='{self.namespace}', pod=~'{pods_regex}'"
 
-            res_cpu = self.fetch_prom(query_cpu)
-            if res_cpu:
-                self.metrics["cpu_usage"] += int(float(res_cpu[0]["value"][1]) * 1000)
+        queries = {
+            "cpu_usage": f"sum(irate(container_cpu_usage_seconds_total{{{base}}}[5m]))",
+            "mem_usage": f"sum(container_memory_working_set_bytes{{{base}}})",
+            "traffic_in": f"sum(irate(container_network_receive_bytes_total{{{base}}}[5m]))",
+            "traffic_out": f"sum(irate(container_network_transmit_bytes_total{{{base}}}[5m]))",
+        }
+
+        transforms = {
+            "cpu_usage": lambda v: int(float(v) * 1000),
+            "mem_usage": lambda v: int(float(v) / 1_048_576),
+            "traffic_in": lambda v: int(float(v) / 1_024),
+            "traffic_out": lambda v: int(float(v) / 1_024),
+        }
+
+        for key, query in queries.items():
+            res = self.fetch_prom(query)
+            if res:
+                self.metrics[key] = transforms[key](res[0]["value"][1])
             else:
-                logger.warning("No CPU data from Prometheus for pod %s", pod)
+                logger.warning("No %s data from Prometheus", key)
 
-            res_mem = self.fetch_prom(query_mem)
-            if res_mem:
-                self.metrics["mem_usage"] += int(float(res_mem[0]["value"][1]) / 1000000)
-            else:
-                logger.warning("No MEM data from Prometheus for pod %s", pod)
-
-            res_rec = self.fetch_prom(query_rec)
-            if res_rec:
-                self.metrics["received_traffic"] += int(float(res_rec[0]["value"][1]) / 1000)
-            else:
-                logger.warning("No receive traffic data from Prometheus for pod %s", pod)
-
-            res_trans = self.fetch_prom(query_trans)
-            if res_trans:
-                self.metrics["transmit_traffic"] += int(float(res_trans[0]["value"][1]) / 1000)
-            else:
-                logger.warning("No transmit traffic data from Prometheus for pod %s", pod)
-
-        # TODO: should not be hardcoded
-        if self.name == "recommendationservice":
-            query_get_cart = "locust_requests_avg_response_time{method='GET', name='/cart'}"
-
-            get_cart = 0
-
-            res_get_cart = self.fetch_prom(query_get_cart)
-            if res_get_cart:
-                get_cart = float(res_get_cart[0]["value"][1])
-
-            self.metrics["latency"] = float(f"{get_cart:.3f}")
+    def _collect_latency(self) -> None:
+        res = self.fetch_prom(
+            "locust_requests_avg_response_time{method='GET', name='/cart'}"
+        )
+        self.metrics["latency"] = round(float(res[0]["value"][1]), 3) if res else 0.0
 
     def update_desired_replicas(self) -> None:
-        # TODO: here can happen ZeroDivisionError (cpu_request/mem_request or threshold is 0)
         cpu_target_usage = self.num_pods * self.cpu_target
         mem_target_usage = self.num_pods * self.mem_target
+
+        if cpu_target_usage == 0 or mem_target_usage == 0:
+            logger.error("Target usage is zero, skipping scaling decision")
+            return
 
         desired_replicas_cpu = math.ceil(self.num_pods * (self.metrics["cpu_usage"] / cpu_target_usage))
         desired_replicas_mem = math.ceil(self.num_pods * (self.metrics["mem_usage"] / mem_target_usage))

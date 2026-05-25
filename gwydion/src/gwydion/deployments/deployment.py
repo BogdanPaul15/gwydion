@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Self
+from typing import Self, Optional
 import logging
 
 import requests
@@ -8,10 +8,6 @@ import kubernetes
 from kubernetes import client
 
 from gwydion.utils import backoff
-
-TOKEN = ""
-HOST = ""
-PROMETHEUS_URL = ""
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +22,21 @@ class Deployment(ABC):
         namespace (str): The Kubernetes namespace.
         min_pods (int): Minimum replica boundary.
         max_pods (int): Maximum replica boundary.
+        host (Optional[str]): Kubernetes API server host URL.
+        token (Optional[str]): Authentication token for the k8s API.
+        prometheus_url (Optional[str]): Endpoint for Prometheus metrics queries.
         pod_names (List[str]): List of currently active pod names.
         num_previous_pods (int): Number of pods in the previous observation step.
         num_pods (int): Current number of pods.
         desired_replicas (int): Target number of replicas calculated by the deployment.
         metrics (dict): Dictionary storing metrics.
     """
+
     def __init__(self, k8s: bool, name: str, namespace: str, min_pods: int,
-                  max_pods: int, **kwargs):
+                  max_pods: int, host: Optional[str] = None,
+                  token: Optional[str] = None,
+                  prometheus_url: Optional[str] = None,
+                  **kwargs):
         """Initializes the Deployment with deployment config.
         
         Args:
@@ -42,6 +45,9 @@ class Deployment(ABC):
             namespace (str): Namespace name of the deployment.
             min_pods (int): Minimum replica count allowed for deployment.
             max_pods (int): Maximum replica count allowed for deployment.
+            host (Optional[str]): Kubernetes API server host URL.
+            token (Optional[str]): Authentication token for the k8s API.
+            prometheus_url (Optional[str]): Endpoint for Prometheus metrics queries.
         """
         self.k8s = k8s
         self.name = name
@@ -49,6 +55,10 @@ class Deployment(ABC):
 
         self.min_pods = min_pods
         self.max_pods = max_pods
+
+        self.host = host
+        self.token = token
+        self.prometheus_url = prometheus_url
 
         self.pod_names = []
         self.num_previous_pods = 1
@@ -63,11 +73,23 @@ class Deployment(ABC):
             self._refresh_pods()
 
     def _initialize_k8s_client(self) -> None:
-        """Sets up the Kubernetes API client."""
+        """Sets up the Kubernetes API client.
+        
+        Raises:
+            ValueError: If 'token' or 'host' are not provided when running in k8s mode.
+        """
+        if self.token is None:
+            raise ValueError(f"Token is missing for deployment '{self.name}'. "
+                            "Check your YAML configuration under 'env: token'.")
+
+        if self.host is None:
+            raise ValueError(f"Host is missing for deployment '{self.name}'.")
+
         self.config = client.Configuration()
         self.config.verify_ssl = False
-        self.config.api_key = {"authorization": "Bearer " + TOKEN}
-        self.config.host = HOST
+        self.config.api_key = {"authorization": f"Bearer {self.token}"}
+        self.config.host = self.host
+
         self.client = client.ApiClient(self.config)
         self.v1 = client.CoreV1Api(self.client)
         self.apps_v1 = client.AppsV1Api(self.client)
@@ -78,7 +100,7 @@ class Deployment(ABC):
         pods = self.v1.list_namespaced_pod(namespace=self.namespace,
                                            label_selector="app=" + self.name)
         for pod in pods.items:
-            if pod.metadata.labels["app"] == self.name:
+            if pod.metadata.deletion_timestamp is None:
                 self.pod_names.append(pod.metadata.name)
 
         self.deployment_object = self.apps_v1.read_namespaced_deployment(name=self.name,
@@ -90,7 +112,7 @@ class Deployment(ABC):
                       self.num_pods)
 
     @classmethod
-    def from_config(cls, cfg: dict, k8s: bool) -> Self:
+    def from_config(cls, cfg: dict, k8s: bool, host: str, token: str, prometheus_url: str) -> Self:
         """Factory method to instantiate a deployment from a configuration dictionary.
 
         This method acts as a mapper between the nested YAML configuration structure
@@ -101,6 +123,9 @@ class Deployment(ABC):
             cfg (dict): The configuration dictionary for a single deployment.
             k8s (bool): If True, the deployment will attempt to connect
                 to a live Kubernetes cluster via the API.
+            host (str): Kubernetes API server host URL.
+            token (str): Authentication token for the k8s API.
+            prometheus_url (str): Endpoint for Prometheus metrics queries.
 
         Returns:
             Deployment: A fully initialized instance of the deployment 
@@ -116,6 +141,10 @@ class Deployment(ABC):
             namespace=cfg["namespace"],
             min_pods=pods_cfg["min"],
             max_pods=pods_cfg["max"],
+
+            host=host,
+            token=token,
+            prometheus_url=prometheus_url,
 
             cpu_request=resources_cfg["requests"]["cpu"],
             cpu_limit=resources_cfg["limits"]["cpu"],
@@ -158,8 +187,8 @@ class Deployment(ABC):
         """
         logger.debug("Patching %s | Current replicas: %d | Target replicas: %d",
                       self.name, self.num_previous_pods, self.deployment_object.spec.replicas)
-        self.apps_v1.patch_namespaced_deployment(
-            name=self.name, namespace=self.namespace, body=self.deployment_object
+        self.apps_v1.patch_namespaced_deployment_scale(
+            name=self.name, namespace=self.namespace, body={"spec": {"replicas": self.deployment_object.spec.replicas}}
         )
         logger.debug("Patch successful for %s", self.name)
 
@@ -178,13 +207,13 @@ class Deployment(ABC):
             RuntimeError: If Prometheus returns a non-success status after retries.
         """
         response = requests.get(
-            PROMETHEUS_URL + "/api/v1/query",
+            f"{self.prometheus_url}/api/v1/query",
             params={"query": query},
             timeout=5
         )
 
         if response.json()["status"] != "success":
-            logger.error("Prometheus query failed for %s: %s", self.name, 
+            logger.error("Prometheus query failed for %s: %s", self.name,
                          response.json().get("error", ""))
             raise RuntimeError(f"Prometheus error: {response.json()['status']} \
                                - {response.json().get('error', '')}")

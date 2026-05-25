@@ -26,26 +26,38 @@ class Redis(BaseEnv):
         return spaces.Box(
             low=np.array([
                 leader.min_pods, # Number of pods -- leader
+                leader.min_pods, # Desired number of pods -- leader
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
+                0, # Traffic In (in KiB)
+                0, # Traffic Out (in KiB)
                 # 0, # CPU forecast (in m)
                 # 0, # MEM forecast (in MiB)
                 follower.min_pods, # Number of pods -- follower
+                follower.min_pods, # Desired number of pods -- follower
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
+                0, # Traffic In (in KiB)
+                0, # Traffic Out (in KiB)
                 # 0, # CPU forecast (in m)
                 # 0, # MEM forecast (in MiB)
                 0, # None counter
             ]),
             high=np.array([
                 leader.max_pods, # Number of pods -- leader
+                leader.max_pods, # Desired number of pods -- leader
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
+                20000, # Traffic In (in KiB)
+                20000, # Traffic Out (in KiB)
                 # 1000, # CPU forecast (in m)
                 # 1000, # MEM forecast (in MiB)
                 follower.max_pods, # Number of pods -- follower
+                follower.max_pods, # Desired number of pods -- leader
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
+                20000, # Traffic In (in KiB)
+                20000, # Traffic Out (in KiB)
                 # 1000, # CPU forecast (in m)
                 # 1000, # MEM forecast (in MiB)
                 25, # None counter
@@ -55,16 +67,21 @@ class Redis(BaseEnv):
 
     def get_state(self) -> np.ndarray:
         leader, follower = self.deployment_list[ID_REDIS_LEADER], self.deployment_list[ID_REDIS_FOLLOWER]
-        # return self.normalize(ob)
         return np.array([
             leader.num_pods,
+            leader.desired_replicas,
             leader.metrics["cpu_usage"],
             leader.metrics["mem_usage"],
+            leader.metrics["traffic_in"],
+            leader.metrics["traffic_out"],
             # leader.cpu_forecast, # CPU forecast (in m)
             # leader.mem_forecast, # MEM forecast (in MiB)
             follower.num_pods,
+            follower.desired_replicas,
             follower.metrics["cpu_usage"],
             follower.metrics["mem_usage"],
+            follower.metrics["traffic_in"],
+            follower.metrics["traffic_out"],
             # follower.cpu_forecast, # CPU forecast (in m)
             # follower.mem_forecast, # MEM forecast (in MiB)
             self.none_counter,
@@ -77,11 +94,14 @@ class Redis(BaseEnv):
         }
 
         for i, d in enumerate(self.deployment_list):
-            idx = i * 3
+            idx = i * 6
             row_data.update({
                 f"{d.name}_num_pods": int(obs[idx]),
-                f"{d.name}_cpu_usage": int(obs[idx + 1]),
-                f"{d.name}_mem_usage": int(obs[idx + 2])
+                f"{d.name}_desired_replicas": int(obs[idx + 1]),
+                f"{d.name}_cpu_usage": int(obs[idx + 2]),
+                f"{d.name}_mem_usage": int(obs[idx + 3]),
+                f"{d.name}_traffic_in": int(obs[idx + 4]),
+                f"{d.name}_traffic_out": int(obs[idx + 5])
             })
         self.episode_buffer.append(row_data)
 
@@ -97,8 +117,11 @@ class Redis(BaseEnv):
             for d in self.deployment_list:
                 fields.extend([
                     f"{d.name}_num_pods",
+                    f"{d.name}_desired_replicas",
                     f"{d.name}_cpu_usage",
                     f"{d.name}_mem_usage",
+                    f"{d.name}_traffic_in",
+                    f"{d.name}_traffic_out",
                 ])
             fields.append("redis-leader_latency")
 
