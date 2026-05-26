@@ -7,8 +7,10 @@
 *.zip
 *.pkl
 logs/
-results/**/events.out.tfevents.*
+**events.out.tfevents.*
 *.png
-.log
+*.log
+*.db
+*.json
 
 **/simulation/artifacts/

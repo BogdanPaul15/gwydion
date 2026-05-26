@@ -56,6 +56,7 @@ class BaseEnv(gym.Env):
         total_reward (float): Accumulated reward for the current episode.
         info (dict): A dictionary containing auxiliary information complementing observation.
         none_counter (int): Count of "Do Nothing" consecutive actions in the current episode.
+        last_obs (Optional[np.ndarray]): The most recent observation vector.
         avg_pods (List[int]): List containing the number of pods for each deployment tracked in
             the current episode (e.g., index 0 corresponds to the first deployment).
         avg_latency (List[float]): List containing the latency values for Deployment 0, recorded
@@ -114,6 +115,7 @@ class BaseEnv(gym.Env):
         self.info = {}
 
         self.none_counter = 0
+        self.last_obs: Optional[np.ndarray] = None
 
         self.avg_pods = []
         self.avg_latency = []
@@ -221,6 +223,7 @@ class BaseEnv(gym.Env):
 
         self.avg_pods = []
         self.avg_latency = []
+        self.last_obs = None
 
         self.time_start = 0
         self.execution_time = 0
@@ -293,6 +296,7 @@ class BaseEnv(gym.Env):
         }
 
         ob = self.get_state()
+        self.last_obs = ob
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False

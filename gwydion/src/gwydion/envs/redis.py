@@ -62,6 +62,20 @@ class Redis(BaseEnv):
             dtype=np.float32
         )
 
+    @property
+    def obs_feature_names(self) -> list[str]:
+        leader = self.deployment_list[ID_REDIS_LEADER].name
+        follower = self.deployment_list[ID_REDIS_FOLLOWER].name
+        return [
+            f"{leader}_num_pods", f"{leader}_desired_replicas",
+            f"{leader}_cpu_usage", f"{leader}_mem_usage",
+            f"{leader}_traffic_in", f"{leader}_traffic_out",
+            f"{follower}_num_pods", f"{follower}_desired_replicas",
+            f"{follower}_cpu_usage", f"{follower}_mem_usage",
+            f"{follower}_traffic_in", f"{follower}_traffic_out",
+            "none_counter",
+        ]
+
     def get_state(self) -> np.ndarray:
         leader, follower = self.deployment_list[ID_REDIS_LEADER], self.deployment_list[ID_REDIS_FOLLOWER]
         return np.array([

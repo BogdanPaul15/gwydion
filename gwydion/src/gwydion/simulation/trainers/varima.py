@@ -55,7 +55,7 @@ class VARIMATrainer(BaseTrainer):
 
 		# Tiny jitter breaks exact collinearity between target columns (e.g. two
 		# deployments sharing an identical latency series).
-		jitter = np.random.default_rng(0).normal(0.0, 1e-3, endog_tr.shape)
+		jitter = np.random.default_rng(self.seed).normal(0.0, 1e-3, endog_tr.shape)
 		self._endog_train = self._endog_scaler.transform(endog_tr) + jitter
 		self._exog_train = self._exog_scaler.transform(exog_tr)
 		self._endog_val = self._endog_scaler.transform(endog_va)

@@ -70,6 +70,18 @@ class OnlineBoutique(BaseEnv):
             dtype=np.float32
         )
 
+    @property
+    def obs_feature_names(self) -> list[str]:
+        names = []
+        for d in self.deployment_list:
+            names += [
+                f"{d.name}_num_pods", f"{d.name}_desired_replicas",
+                f"{d.name}_cpu_usage", f"{d.name}_mem_usage",
+                f"{d.name}_traffic_in", f"{d.name}_traffic_out",
+            ]
+        names.append("none_counter")
+        return names
+
     def get_state(self) -> np.ndarray:
         recommendation = self.deployment_list[ID_RECOMMENDATION]
         productcatalog = self.deployment_list[ID_PRODUCT_CATALOG]

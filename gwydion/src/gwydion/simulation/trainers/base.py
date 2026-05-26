@@ -33,14 +33,16 @@ class BaseTrainer(ABC):
 
 	model_key: str = "base"
 
-	def __init__(self, config_path: str) -> None:
+	def __init__(self, config_path: str, seed: int = 42) -> None:
 		"""Loads the config and dataset and builds the chronological splits.
 
 		Args:
 			config_path (str): Path to the trainer YAML config.
+			seed (int): Random seed for reproducibility. Defaults to 42.
 		"""
 		self._cfg = self._load_config(config_path)
 		self._training_cfg = self._cfg.get("training", {})
+		self.seed = seed
 
 		self.best_params: Optional[dict] = None
 
