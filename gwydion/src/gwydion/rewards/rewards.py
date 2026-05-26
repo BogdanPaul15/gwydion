@@ -67,6 +67,7 @@ class CostStrategy(RewardStrategy):
     It penalizes inactivity (``none_counter``) when the cluster is not in the 
     desired state, forcing the agent to avoid sub-optimal states.
     """
+
     def calculate(self, env):
         reward = sum(1 for d in env.deployment_list if d.num_pods == d.desired_replicas)
 

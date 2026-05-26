@@ -176,7 +176,7 @@ class Arena:
 			env = VecNormalize.load(stats_path, env.venv)
 			env.training = True
 			env.norm_reward = True
-			model = self.spec.cls.load(model_path, env=env)
+			model = self.spec.cls.load(model_path, env=env, device="cpu")
 			reset_timesteps = False
 		else:
 			model = self.build_model(env, converted, tensorboard_log=str(run_dir / "tb"))
@@ -238,7 +238,7 @@ class Arena:
 		env.training = False
 		env.norm_reward = False
 
-		model = self.spec.cls.load(model_path, env=env)
+		model = self.spec.cls.load(model_path, env=env, device="cpu")
 
 		writer = EpisodeMetricsWriter(
 			out_path=run_dir / "episodes.csv",
