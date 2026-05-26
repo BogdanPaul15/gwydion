@@ -8,6 +8,7 @@ ID_REDIS_FOLLOWER = 1
 
 class Redis(BaseEnv):
     """Horizontal Scaling for Redis in K8s - an Gymansium gym environment."""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

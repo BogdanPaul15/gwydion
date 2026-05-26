@@ -13,6 +13,7 @@ class OnlineBoutiqueDeployment(Deployment):
     Scales based on a weighted CPU and MEM usage, Network I/O,
     and by tracking cart specific latency.
     """
+
     def __init__(self, k8s, name, namespace, min_pods, max_pods,
                  cpu_request, cpu_limit, mem_request, mem_limit,
                  host=None, token=None, prometheus_url=None,

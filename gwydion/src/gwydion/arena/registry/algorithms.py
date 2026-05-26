@@ -23,6 +23,7 @@ class AlgorithmSpec:
         converter: Converter from Optuna hyperparams suggestions to SB3 hyperparams.
         maskable: Whether a maskable algorithm is used.
     """
+
     cls:                  Type[BaseAlgorithm]
     policy:               str
     sampler:              Callable[..., dict[str, Any]]

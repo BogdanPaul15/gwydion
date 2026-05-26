@@ -17,6 +17,7 @@ ID_EMAIL = 10
 
 class OnlineBoutique(BaseEnv):
     """Horizontal Scaling for Online Boutique in K8s - an Gymnasium gym environment."""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
