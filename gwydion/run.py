@@ -1,143 +1,174 @@
-import logging
 import argparse
-import time
+import json
+import logging
+import random
+import sys
+from pathlib import Path
 
-from setuptools.command.alias import alias
-from stable_baselines3 import PPO
-from stable_baselines3 import A2C
-from sb3_contrib import RecurrentPPO, MaskablePPO
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor, DummyVecEnv, VecNormalize
-from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.monitor import Monitor
+import numpy as np
+import torch
 
-from gwydion.envs import Redis, OnlineBoutique
-from gwydion.rewards import CostStrategy, LatencyStrategy
-from gwydion.utils import test_model
+from gwydion.arena import Arena
+from gwydion.envs import OnlineBoutique, Redis
+from gwydion.rewards import CostStrategy, SmoothCostStrategy, LatencyStrategy, MultiObjectiveStrategy
 
-# Logging
+logger = logging.getLogger(__name__)
 
-logging.basicConfig(filename='run.log', filemode='w', level=logging.INFO)
-logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+USE_CASES = {
+	"redis":          (Redis,          "configs/redis.yaml",          0),
+	"onlineboutique": (OnlineBoutique, "configs/online_boutique.yaml", 9),
+}
 
-parser = argparse.ArgumentParser(description='Run ILP!')
-parser.add_argument('--alg', default='ppo', help='The algorithm: ["ppo", "recurrent_ppo", "a2c"]')
-parser.add_argument('--k8s', default=False, action="store_true", help='K8s mode')
-parser.add_argument('--use_case', default='redis', help='Apps: ["redis", "onlineboutique"]')
-parser.add_argument('--goal', default='cost', help='Reward Goal: ["cost", "latency"]')
-parser.add_argument('--seed', default=None, type=int, help='Random seed for reproducibility')
+LATENCY_THRESHOLDS = {
+	"redis":          250.0,
+	"onlineboutique": 3000.0,
+}
 
-parser.add_argument('--training', default=True, action="store_true", help='Training mode')
-parser.add_argument('--testing', default=False, action="store_true", help='Testing mode')
-parser.add_argument('--loading', default=False, action="store_true", help='Loading mode')
-parser.add_argument('--load_path',
-                    default='logs/a2c_env_onlineboutique_goal_cost_k8s_False_totalSteps_500000/a2c_env_redis_goal_cost_k8s_False_totalSteps_500000.zip',
-                    help='Loading path, ex: logs/model/test.zip')
-parser.add_argument('--test_path',
-                    default='logs/a2c_env_onlineboutique_goal_latency_k8s_False_totalSteps_500000/a2c_env_onlineboutique_goal_latency_k8s_False_totalSteps_500000.zip',
-                    help='Testing path, ex: logs/model/test.zip')
+def build_reward_strategy(goal: str, use_case: str,
+						   cost_weight: float = 1.0, latency_weight: float = 1.0):
+	target_id = USE_CASES[use_case][2]
+	threshold = LATENCY_THRESHOLDS[use_case]
 
-parser.add_argument('--steps', default=50000, help='The steps for saving.')
-parser.add_argument('--total_steps', default=250000, help='The total number of steps.')
+	if goal == "cost":
+		return CostStrategy()
+	if goal == "smooth_cost":
+		return SmoothCostStrategy()
+	if goal == "latency":
+		return LatencyStrategy(target_id=target_id, threshold=threshold)
+	if goal == "multi":
+		return MultiObjectiveStrategy(objectives=[
+			(CostStrategy(), cost_weight),
+			(LatencyStrategy(target_id=target_id, threshold=threshold), latency_weight),
+		])
+	raise ValueError(f"Unknown --goal '{goal}'.")
 
-args = parser.parse_args()
+def load_hyperparams(path: str, expected_strategy: str | None = None) -> dict:
+	"""Loads a best_params.json (output of ``arena.tune()``) and returns the
+	raw sampled params."""
+	data = json.loads(Path(path).read_text(encoding="utf-8"))
+	saved = data.get("reward_strategy")
+	if saved and expected_strategy and saved != expected_strategy:
+		print(
+			f"WARNING: hyperparams were tuned with '{saved}' but you are "
+			f"training with '{expected_strategy}'. Pass --goal to match.",
+			file=sys.stderr,
+		)
+	return data.get("best_params", data)
 
+def parser() -> argparse.ArgumentParser:
+	p = argparse.ArgumentParser(description="Arena entrypoint.")
+	p.add_argument("--phase", required=True, choices=["tune", "train", "test"])
+	p.add_argument("--alg", required=True,
+				   choices=["ppo", "recurrent_ppo", "maskable_ppo", "trpo", "a2c"])
+	p.add_argument("--use-case", required=True, choices=list(USE_CASES))
+	p.add_argument("--goal", default="cost",
+				   choices=["cost", "smooth_cost", "latency", "multi"])
+	p.add_argument("--cost-weight", type=float, default=1.0,
+				   help="Cost objective weight (--goal multi only).")
+	p.add_argument("--latency-weight", type=float, default=1.0,
+				   help="Latency objective weight (--goal multi only).")
+	p.add_argument("--config",
+				   help="Override the default config for this use case "
+						"(default: configs/{use-case}.yaml).")
+	p.add_argument("--n-envs", type=int, default=1,
+				   help="Parallel envs for tune/train.")
+	p.add_argument("--seed", type=int, default=42)
+	p.add_argument("--output-dir", default="arena_results")
 
-def get_model(alg, env, tensorboard_log, seed=None):
-    model = 0
-    if alg == 'ppo':
-        model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=tensorboard_log, n_steps=500, seed=seed)
-    elif alg == 'recurrent_ppo':
-        model = RecurrentPPO("MlpLstmPolicy", env, verbose=1, tensorboard_log=tensorboard_log, seed=seed)
-    elif alg == 'a2c':
-        model = A2C("MlpPolicy", env, verbose=1, tensorboard_log=tensorboard_log, seed=seed)  # , n_steps=steps
-    else:
-        logging.info('Invalid algorithm!')
+	# tune
+	p.add_argument("--n-trials", type=int, default=20)
+	p.add_argument("--tune-steps", type=int, default=100_000)
+	p.add_argument("--n-eval-episodes", type=int, default=10)
+	p.add_argument("--n-jobs", type=int, default=1, help="Parallel Optuna trials.")
 
-    return model
+	# train
+	p.add_argument("--total-steps", type=int, default=500_000)
+	p.add_argument("--save-freq", type=int, default=50_000)
+	p.add_argument("--run-label", default="default")
+	p.add_argument("--hyperparams",
+				   help="Path to a best_params.json from a tune run.")
+	p.add_argument("--resume-model",
+				   help="Path to a .zip model checkpoint to resume training from.")
+	p.add_argument("--resume-stats",
+				   help="Path to the matching vecnormalize.pkl when resuming.")
 
+	# test
+	p.add_argument("--model", help="Path to the trained model .zip (test phase).")
+	p.add_argument("--stats", help="Path to the vecnormalize.pkl (test phase).")
+	p.add_argument("--n-episodes", type=int, default=100)
 
-def get_load_model(alg, tensorboard_log, load_path):
-    if alg == 'ppo':
-        return PPO.load(load_path, reset_num_timesteps=False, verbose=1, tensorboard_log=tensorboard_log, n_steps=500)
-    elif alg == 'recurrent_ppo':
-        return RecurrentPPO.load(load_path, reset_num_timesteps=False, verbose=1,
-                                 tensorboard_log=tensorboard_log)  # n_steps=steps
-    elif alg == 'a2c':
-        return A2C.load(load_path, reset_num_timesteps=False, verbose=1, tensorboard_log=tensorboard_log)
-    else:
-        logging.info('Invalid algorithm!')
+	p.add_argument("--record-step-obs", action="store_true",
+				   help="Save raw per-step observations to step_obs.csv.")
+	return p
 
+def main() -> None:
+	args = parser().parse_args()
 
-def get_env(use_case, goal, seed=None):
-    def make_env():
-        if use_case == "redis":
-            if goal == "cost":
-                return Redis(config_path="configs/redis.yaml", reward_strategy=CostStrategy(), seed=seed)
-            else:
-                return Redis(config_path="configs/redis.yaml", reward_strategy=LatencyStrategy(target_id=0, threshold=250.0), seed=seed)
-        elif use_case == 'onlineboutique':
-            if goal == "cost":
-                return OnlineBoutique(config_path="configs/online_boutique.yaml", reward_strategy=CostStrategy(), seed=seed)
-            else:
-                return OnlineBoutique(config_path="configs/online_boutique.yaml", reward_strategy=LatencyStrategy(target_id=9, threshold=3000.0), seed=seed)
-        else:
-            raise ValueError(f"Unknown use_case: {use_case}")
+	random.seed(args.seed)
+	np.random.seed(args.seed)
+	torch.manual_seed(args.seed)
 
-    env = DummyVecEnv([make_env])
-    env = VecMonitor(env)
-    env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.0)
+	log_path = Path(args.output_dir) / "gwydion.log"
+	log_path.parent.mkdir(parents=True, exist_ok=True)
+	file_handler = logging.FileHandler(log_path)
+	file_handler.setLevel(logging.DEBUG)
+	file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
 
-    return env
+	root = logging.getLogger()
+	root.setLevel(logging.DEBUG)
+	root.handlers.clear()
+	root.addHandler(file_handler)
 
+	env_cls, default_cfg, _ = USE_CASES[args.use_case]
+	config_path = args.config or default_cfg
+	reward = build_reward_strategy(args.goal, args.use_case,
+									cost_weight=args.cost_weight,
+									latency_weight=args.latency_weight)
 
-def main():
-    # Import and initialize Environment
-    logging.info(args)
+	arena = Arena(
+		env_cls=env_cls,
+		alg=args.alg,
+		n_envs=args.n_envs,
+		seed=args.seed,
+		output_dir=args.output_dir,
+	)
 
-    alg = args.alg
-    k8s = args.k8s
-    use_case = args.use_case
-    goal = args.goal
-    seed = args.seed
-    loading = args.loading
-    load_path = args.load_path
-    training = args.training
-    testing = args.testing
-    test_path = args.test_path
-
-    steps = int(args.steps)
-    total_steps = int(args.total_steps)
-
-    env = get_env(use_case, goal, seed=seed)
-
-    scenario = ''
-    if k8s:
-        scenario = 'real'
-    else:
-        scenario = 'simulated'
-
-    tensorboard_log = "results/" + use_case + "/" + scenario + "/" + goal + "/"
-
-    name = alg + "_env_" + use_case + "_goal_" + goal + "_k8s_" + str(k8s) + "_totalSteps_" + str(total_steps)
-
-    # callback
-    checkpoint_callback = CheckpointCallback(save_freq=steps, save_path="logs/" + name, name_prefix=name)
-
-    if training:
-        # if loading:  # resume training
-        #     model = get_load_model(alg, tensorboard_log, load_path)
-        #     model.set_env(env)
-        #     model.learn(total_timesteps=total_steps, tb_log_name=name + "_run", callback=checkpoint_callback)
-        # else:
-        model = get_model(alg, env, tensorboard_log, seed=seed)
-        model.learn(total_timesteps=total_steps, tb_log_name=name + "_run", callback=checkpoint_callback)
-
-        # model.save(name)
-
-    # if testing:
-    #     model = get_load_model(alg, tensorboard_log, test_path)
-    #     test_model(model, env, n_episodes=25, n_steps=25, smoothing_window=5, fig_name=name + "_check2.png")
-
+	if args.phase == "tune":
+		arena.tune(
+			config_path=config_path,
+			reward_strategy=reward,
+			n_trials=args.n_trials,
+			tune_steps=args.tune_steps,
+			n_eval_episodes=args.n_eval_episodes,
+			n_jobs=args.n_jobs,
+		)
+	elif args.phase == "train":
+		hp = load_hyperparams(args.hyperparams, reward.__class__.__name__) if args.hyperparams else None
+		resume = ((args.resume_model, args.resume_stats)
+				  if args.resume_model and args.resume_stats else None)
+		arena.train(
+			config_path=config_path,
+			reward_strategy=reward,
+			hyperparams=hp,
+			total_steps=args.total_steps,
+			save_freq=args.save_freq,
+			run_label=args.run_label,
+			resume_from=resume,
+			record_step_obs=args.record_step_obs,
+		)
+	elif args.phase == "test":
+		if not (args.model and args.stats):
+			print("--model and --stats are required for --phase test", file=sys.stderr)
+			sys.exit(2)
+		arena.test(
+			config_path=config_path,
+			reward_strategy=reward,
+			model_path=args.model,
+			stats_path=args.stats,
+			n_episodes=args.n_episodes,
+			run_label=args.run_label,
+			record_step_obs=args.record_step_obs,
+		)
 
 if __name__ == "__main__":
-    main()
+	main()
