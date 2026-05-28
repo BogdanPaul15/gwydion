@@ -11,21 +11,21 @@ def linear_schedule(initial_value: float):
 
 def sample_ppo_params(trial: optuna.Trial) -> dict:
     """Sample PPO hyperparameters for one Optuna trial."""
-    batch_size_pow = trial.suggest_int("batch_size_pow", 2, 10) # 4 to 1024
-    n_steps_pow    = trial.suggest_int("n_steps_pow", 5, 12) # 32 to 4096
+    batch_size_pow = trial.suggest_int("batch_size_pow", 5, 8) # 32 to 256
+    n_steps_pow    = trial.suggest_int("n_steps_pow", 8, 10) # 256 to 1024
 
     # Discount factor - sampled as (1 - gamma) in log-scale
     one_minus_gamma      = trial.suggest_float("one_minus_gamma", 0.0001, 0.03, log=True)
     one_minus_gae_lambda = trial.suggest_float("one_minus_gae_lambda", 0.0001, 0.1, log=True)
 
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 0.002, log=True)
+    learning_rate = trial.suggest_float("learning_rate", 5e-5, 5e-4, log=True)
     lr_schedule   = trial.suggest_categorical("lr_schedule", ["constant", "linear"])
-    ent_coef      = trial.suggest_float("ent_coef", 1e-8, 0.1, log=True)
-    clip_range    = trial.suggest_categorical("clip_range", [0.1, 0.2, 0.3, 0.4])
-    n_epochs      = trial.suggest_int("n_epochs", 5, 20)
-    max_grad_norm = trial.suggest_float("max_grad_norm", 0.3, 2)
+    ent_coef      = trial.suggest_float("ent_coef", 1e-8, 1e-2, log=True)
+    clip_range    = trial.suggest_categorical("clip_range", [0.2, 0.3])
+    n_epochs      = trial.suggest_int("n_epochs", 5, 15)
+    max_grad_norm = trial.suggest_float("max_grad_norm", 0.3, 1.0)
 
-    net_arch      = trial.suggest_categorical("net_arch", ["tiny", "small"])
+    net_arch      = trial.suggest_categorical("net_arch", ["small", "medium"])
     activation_fn = trial.suggest_categorical("activation_fn", ["tanh", "relu"])
 
     trial.set_user_attr("gamma",      1 - one_minus_gamma)

@@ -26,7 +26,23 @@ def register(name: str):
     return decorator
 
 def build_simulation_strategies(cfg: dict, seed: Optional[int] = None, **kwargs: Any) -> SimulationStrategy:
-    """TODO"""
+    """Instantiates a simulation strategy from a config dict.
+
+    Args:
+        cfg: Must contain a ``type`` key matching a name registered via
+            :func:`register`. Remaining keys are passed to the strategy's
+            ``config`` parameter.
+        seed: Optional random seed forwarded to ``strategy.seed()`` after
+            construction.
+        **kwargs: Extra keyword arguments forwarded to the strategy constructor
+            (e.g. ``df``, ``deployment_names``).
+
+    Returns:
+        SimulationStrategy: The constructed strategy, already seeded.
+
+    Raises:
+        ValueError: If ``cfg["type"]`` is not registered.
+    """
     strategy_type = cfg["type"]
     cls = _REGISTRY.get(strategy_type)
 

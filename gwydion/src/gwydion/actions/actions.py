@@ -97,7 +97,7 @@ class ScaleDown(Action):
 
     def can_execute(self, env, deployment_id: int) -> bool:
         deployment = env.deployment_list[deployment_id]
-        return deployment.num_pods + self.replicas >= deployment.min_pods
+        return deployment.num_pods - self.replicas >= deployment.min_pods
 
     @property
     def label(self) -> str:

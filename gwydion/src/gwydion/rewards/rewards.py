@@ -73,6 +73,8 @@ class CostStrategy(RewardStrategy):
 
         if reward != env.num_apps and env.none_counter > 2:
             reward = -env.none_counter
+        elif reward == 0 and getattr(env, "_last_step_noop", False):
+            reward = -1
         return reward
 
 class SmoothCostStrategy(RewardStrategy):
@@ -121,7 +123,7 @@ class SmoothCostStrategy(RewardStrategy):
                 needs_scaling = True
 
         if needs_scaling and env.none_counter > self.patience:
-            reward = -float(env.none_counter)
+            reward -= float(min(env.none_counter, 5))
         return reward
 
 class MultiObjectiveStrategy(RewardStrategy):

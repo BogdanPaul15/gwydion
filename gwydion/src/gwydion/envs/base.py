@@ -216,6 +216,7 @@ class BaseEnv(gym.Env):
         self.current_step = 0
         self.none_counter = 0
         self.total_reward = 0
+        self._last_step_noop = False
 
         self.terminated = False
         self.episode_over = False
@@ -289,10 +290,11 @@ class BaseEnv(gym.Env):
              self.current_step, reward, self.total_reward,
              mean(self.avg_pods) if self.avg_pods else 0.0)
 
+        elapsed = time.time() - self.time_start if self.time_start else 0.0
         self.info = {
             "avg_pods": float(mean(self.avg_pods)) if self.avg_pods else 0.0,
             "avg_latency": float(np.mean(self.avg_latency)) if self.avg_latency else 0.0,
-            "execution_time": float(self.execution_time),
+            "execution_time": float(elapsed),
             "latency": float(self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"]),
         }
 
@@ -320,7 +322,7 @@ class BaseEnv(gym.Env):
                         self.execution_time)
             logger.info("="*100)
 
-        return np.array(ob), reward, self.terminated, self.episode_over, self.info
+        return ob, reward, self.terminated, self.episode_over, self.info
 
     def take_action(self, action_pairs: list[tuple[int, int]]) -> None:
         """Executes one scaling action per targeted deployment for this step.
@@ -345,11 +347,13 @@ class BaseEnv(gym.Env):
 
         step_is_noop = True
         for deployment_id, action_id in action_pairs:
-            self.action_stats[action_id] += 1
+            if 0 <= action_id < self.num_actions:
+                self.action_stats[action_id] += 1
             self._actions[action_id].execute(self, deployment_id)
             if not self._actions[action_id].is_noop:
                 step_is_noop = False
 
+        self._last_step_noop = step_is_noop
         if step_is_noop:
             self.none_counter += 1
         else:

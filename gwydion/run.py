@@ -20,7 +20,7 @@ USE_CASES = {
 }
 
 LATENCY_THRESHOLDS = {
-	"redis":          250.0,
+	"redis":          0.1,
 	"onlineboutique": 3000.0,
 }
 
@@ -77,9 +77,12 @@ def parser() -> argparse.ArgumentParser:
 
 	# tune
 	p.add_argument("--n-trials", type=int, default=20)
-	p.add_argument("--tune-steps", type=int, default=100_000)
+	p.add_argument("--tune-steps", type=int, default=200_000)
 	p.add_argument("--n-eval-episodes", type=int, default=10)
 	p.add_argument("--n-jobs", type=int, default=1, help="Parallel Optuna trials.")
+	p.add_argument("--resume-tune",
+				   help="Path to an existing tune_* directory to resume from. "
+						"Skips timestamp dir creation; reuses optuna_study.db.")
 
 	# train
 	p.add_argument("--total-steps", type=int, default=500_000)
@@ -141,6 +144,7 @@ def main() -> None:
 			tune_steps=args.tune_steps,
 			n_eval_episodes=args.n_eval_episodes,
 			n_jobs=args.n_jobs,
+			resume_from_dir=args.resume_tune,
 		)
 	elif args.phase == "train":
 		hp = load_hyperparams(args.hyperparams, reward.__class__.__name__) if args.hyperparams else None

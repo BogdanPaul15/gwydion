@@ -4,7 +4,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
+from matplotlib.pylab import gamma
 import optuna
+from stable_baselines3.common import vec_env
 from optuna.samplers import TPESampler
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -59,7 +61,8 @@ class Arena:
 			 n_trials: int = 20, tune_steps: int = 100_000,
 			 n_eval_episodes: int = 10, n_jobs: int = 1,
 			 pruner: Optional[optuna.pruners.BasePruner] = None,
-			 direction: str = "maximize") -> dict:
+			 direction: str = "maximize",
+			 resume_from_dir: Optional[str] = None) -> dict:
 		"""Executes hyperparameter optimization using Optuna to find the best model configuration.
 
 		Trials train on a vectorized simulation env (``n_envs`` workers) and
@@ -86,16 +89,28 @@ class Arena:
 			dict: A dictionary containing the best sampled hyperparameter values found
 			during the study.
 		"""
-		pruner = pruner or optuna.pruners.MedianPruner(n_warmup_steps=5)
+		pruner = pruner or optuna.pruners.MedianPruner(
+			n_startup_trials=4,
+			n_warmup_steps=150_000,
+			interval_steps=50_000,
+		)
 
-		tune_dir = self.phase_dir("tune", reward_strategy,
-								   trials=n_trials, steps=tune_steps)
+		if resume_from_dir:
+			tune_dir = Path(resume_from_dir)
+			if not (tune_dir / "optuna_study.db").exists():
+				raise FileNotFoundError(
+					f"--resume-tune target has no optuna_study.db: {tune_dir}")
+			logger.info("Resuming tune from %s", tune_dir)
+		else:
+			tune_dir = self.phase_dir("tune", reward_strategy,
+									   trials=n_trials, steps=tune_steps)
 
 		study = optuna.create_study(
 			storage=f"sqlite:///{tune_dir / 'optuna_study.db'}",
 			study_name=f"{self.experiment_label}_{reward_strategy.__class__.__name__}",
 			direction=direction,
-			sampler=TPESampler(seed=self.seed, multivariate=True, n_startup_trials=5),
+			sampler=TPESampler(seed=self.seed, multivariate=True, n_startup_trials=5,
+								   constant_liar=True),
 			pruner=pruner,
 			load_if_exists=True,
 		)
@@ -234,6 +249,7 @@ class Arena:
 
 		env = self.make_env(config_path, reward_strategy,
 							 training=False, gamma=0.99, n_envs_override=1)
+		assert env.num_envs == 1, "Arena.test() must run with n_envs=1"
 		env = VecNormalize.load(stats_path, env.venv)
 		env.training = False
 		env.norm_reward = False
@@ -294,6 +310,7 @@ class Arena:
 
 		def _factory(rank: int):
 			def _init():
+				logging.getLogger().setLevel(logging.ERROR)
 				env = self.env_cls(
 					config_path=config_path,
 					reward_strategy=reward_strategy,
