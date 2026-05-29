@@ -52,7 +52,7 @@ class LSTMTrainer(BaseTrainer):
 		self.window = int(self.model_params.get("window", 16))
 
 		self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-		torch.manual_seed(0)
+		torch.manual_seed(self.seed)
 
 		self._module: Optional[TransitionLSTM] = None
 		self._hyperparams: Optional[dict] = None

@@ -10,12 +10,13 @@ TRAINERS = {
 	"varima": VARIMATrainer,
 }
 
-def build_trainer(model: str, config_path: str) -> BaseTrainer:
+def build_trainer(model: str, config_path: str, seed: int = 42) -> BaseTrainer:
 	"""Instantiates a trainer by model name.
 
 	Args:
 		model (str): One of ``lgbm``, ``lstm`` or ``varima``.
 		config_path (str): Path to the trainer YAML config.
+		seed (int): Random seed for reproducibility. Defaults to 42.
 
 	Returns:
 		BaseTrainer: The instantiated trainer.
@@ -26,7 +27,7 @@ def build_trainer(model: str, config_path: str) -> BaseTrainer:
 	cls = TRAINERS.get(model)
 	if cls is None:
 		raise ValueError(f"Unknown model '{model}'. Known: {sorted(TRAINERS)}")
-	return cls(config_path)
+	return cls(config_path, seed=seed)
 
 __all__ = ["BaseTrainer", "build_trainer", "build_transitions", "TRAINERS",
 		   "LGBMTrainer", "LSTMTrainer", "VARIMATrainer"]

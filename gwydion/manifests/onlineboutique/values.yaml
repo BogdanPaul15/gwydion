@@ -1,0 +1,38 @@
+kubeApiServer:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+coreDns:
+  enabled: false
+kubeStateMetrics:
+  enabled: false
+nodeExporter:
+  enabled: false
+
+alertmanager:
+  enabled: false
+grafana:
+  enabled: false
+defaultRules:
+  create: false
+
+kubelet:
+  enabled: true
+  serviceMonitor:
+    cAdvisor: true
+    resource: false
+    probes: false
+
+prometheus:
+  prometheusSpec:
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: "redis"

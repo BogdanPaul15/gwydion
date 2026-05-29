@@ -159,7 +159,7 @@ class LGBMTrainer(BaseTrainer):
 		ss_ratio  = float(self.model_params.get("scheduled_sampling_ratio", 0.5))
 
 		if ss_rounds > 0:
-			rng = np.random.default_rng(0)
+			rng = np.random.default_rng(self.seed)
 			for r in range(ss_rounds):
 				ratio = ss_ratio * (r + 1) / ss_rounds
 				x_ss, y_ss = self._build_scheduled_dataset(self.to_model(), ratio, rng)

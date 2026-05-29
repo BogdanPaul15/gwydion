@@ -2,7 +2,6 @@ from typing import Optional
 
 import time
 from pathlib import Path
-from datetime import datetime
 from statistics import mean
 import logging
 import yaml
@@ -18,12 +17,11 @@ from gwydion.deployments import build_deployment_list
 from gwydion.actions import build_action_set
 from gwydion.actions import build_action_space
 from gwydion.simulation import build_simulation_strategies
-from gwydion.utils import save_episode_stats
 
 logger = logging.getLogger(__name__)
-logging.disable(logging.ERROR)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 
 class BaseEnv(gym.Env):
     """Abstract Base Class for Kubernetes Horizontal Auto-scaling Environments.
@@ -44,6 +42,7 @@ class BaseEnv(gym.Env):
             representing the current state and metrics for each active K8s deployment.
         reward_strategy (RewardStrategy): The reward objective function.
         waiting_period (int): Seconds to wait after a scaling action (real K8s only).
+        __version__ (str): The version identifier for the environment, used for logging and dataset management.
         constraint_min_pod_replicas (bool): True if a scaling action attempted to reduce pod
             replicas below the minimum allowed for any deployment.
         constraint_max_pod_replicas (bool): True if a scaling action attempted to increase pod
@@ -57,10 +56,7 @@ class BaseEnv(gym.Env):
         total_reward (float): Accumulated reward for the current episode.
         info (dict): A dictionary containing auxiliary information complementing observation.
         none_counter (int): Count of "Do Nothing" consecutive actions in the current episode.
-        action_stats (List[int]): List containing counters for each possible action taken in the
-            current episode. The index corresponds to the action ID.
-        traffic (List[float]): List of unique traffic values preserved in their original
-            appearance order. (Values are collected from a specific deployment)
+        last_obs (Optional[np.ndarray]): The most recent observation vector.
         avg_pods (List[int]): List containing the number of pods for each deployment tracked in
             the current episode (e.g., index 0 corresponds to the first deployment).
         avg_latency (List[float]): List containing the latency values for Deployment 0, recorded
@@ -73,13 +69,14 @@ class BaseEnv(gym.Env):
         action_space (gym.spaces.MultiDiscrete): A 2-dimensional action vector where the first
             element selects which deployment to scale (0 to num_apps - 1) and the second element
             defines the scaling action to perform (0 to num_actions - 1).
+        action_stats (List[int]): List containing counters for each possible action taken in the
+            current episode. The index corresponds to the action ID.
         observation_space (gym.spaces.Box): A multi-dimensional continuous space representing the
             state of the cluster (e.g., current pod counts, traffic)
-        file_results (str): A CSV file used to save the episode metrics.
-        episode_buffer (list): A temporary buffer storing metrics or transitions for the current episode before writing to disk.
         df (Optional[pd.DataFrame]): The primary dataset containing historical observations metrics
             (e.g., CPU, memory, traffic) used to drive the simulation.
     """
+
     def __init__(self, config_path: str, reward_strategy: RewardStrategy, seed: Optional[int] = None):
         """Initializes the BaseEnv with scaling constraints and core attributes.
 
@@ -119,6 +116,7 @@ class BaseEnv(gym.Env):
         self.info = {}
 
         self.none_counter = 0
+        self.last_obs: Optional[np.ndarray] = None
 
         self.avg_pods = []
         self.avg_latency = []
@@ -132,12 +130,6 @@ class BaseEnv(gym.Env):
         self.action_space = self._action_adapter.gym_space
         self.action_stats = [0 for _ in range(self.num_actions)]
         self.observation_space: spaces.Box = None # type: ignore
-
-        # TODO: modify the path where obs and results file are saved
-        self.obs_file = f"{self.name}_observation.csv"
-        self.file_results = "results.csv"
-
-        self.episode_buffer = []
 
         if not self.k8s:
             self._load_dataset()
@@ -221,9 +213,13 @@ class BaseEnv(gym.Env):
         """
         super().reset(seed=seed)
 
+        if not self.k8s and seed is not None:
+            self.simulation_strategy.seed(seed)
+
         self.current_step = 0
         self.none_counter = 0
         self.total_reward = 0
+        self._last_step_noop = False
 
         self.terminated = False
         self.episode_over = False
@@ -232,15 +228,14 @@ class BaseEnv(gym.Env):
 
         self.avg_pods = []
         self.avg_latency = []
+        self.last_obs = None
 
         self.time_start = 0
         self.execution_time = 0
         self.info = {}
         self.action_stats = [0 for _ in range(self.num_actions)]
 
-        self.episode_buffer = []
-
-        self.deployment_list = build_deployment_list(self._deployments_cfgs, self.k8s, 
+        self.deployment_list = build_deployment_list(self._deployments_cfgs, self.k8s,
                                                      self._env_cfg["host"], self._env_cfg["token"],
                                                      self._env_cfg["prometheus_url"])
 
@@ -298,18 +293,22 @@ class BaseEnv(gym.Env):
              self.current_step, reward, self.total_reward,
              mean(self.avg_pods) if self.avg_pods else 0.0)
 
+        elapsed = time.time() - self.time_start if self.time_start else 0.0
         self.info = {
-            "reward": f"{self.total_reward:.2f}",
-            'avg_pods': f"{mean(self.avg_pods):.3f}",
-            'avg_latency': f"{np.mean(self.avg_latency):.3f}",
-            'executionTime': f"{self.execution_time:.3f}"
+            "avg_pods": float(mean(self.avg_pods)) if self.avg_pods else 0.0,
+            "avg_latency": float(np.mean(self.avg_latency)) if self.avg_latency else 0.0,
+            "execution_time": float(elapsed),
+            "latency": float(self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"]),
+            **{f"{d.name}_desired_replicas": float(d.desired_replicas)
+               for d in self.deployment_list},
+            **{f"{d.name}_traffic_in":  float(d.metrics["traffic_in"])
+               for d in self.deployment_list},
+            **{f"{d.name}_traffic_out": float(d.metrics["traffic_out"])
+               for d in self.deployment_list},
         }
 
         ob = self.get_state()
-        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        target_latency = self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"]
-        # TODO: should be called before normalizing the observations
-        self.collect_obs(np.array(ob), date, target_latency)
+        self.last_obs = ob
 
         self.constraint_min_pod_replicas = False
         self.constraint_max_pod_replicas = False
@@ -317,9 +316,13 @@ class BaseEnv(gym.Env):
         if self.current_step == self.max_steps:
             self.episode_count += 1
             self.execution_time = time.time() - self.time_start
-            self.save_obs_to_csv()
-            save_episode_stats(self.file_results, self.episode_count, mean(self.avg_pods), mean(self.avg_latency),
-                        self.total_reward, self.execution_time)
+            self.info.update({
+                "avg_pods": float(mean(self.avg_pods)),
+                "avg_latency": float(np.mean(self.avg_latency)),
+                "execution_time": float(self.execution_time),
+                "total_reward": float(self.total_reward),
+                "action_stats": list(self.action_stats),
+            })
             logger.info("="*100)
             logger.info("EPISODE END: %d | Steps: %d | Reward: %.2f | Avg Pods: %.2f | Avg Latency: %.3f | Time: %.2fs",
                         self.episode_count, self.current_step, self.total_reward,
@@ -328,7 +331,7 @@ class BaseEnv(gym.Env):
                         self.execution_time)
             logger.info("="*100)
 
-        return np.array(ob), reward, self.terminated, self.episode_over, self.info
+        return ob, reward, self.terminated, self.episode_over, self.info
 
     def take_action(self, action_pairs: list[tuple[int, int]]) -> None:
         """Executes one scaling action per targeted deployment for this step.
@@ -353,11 +356,13 @@ class BaseEnv(gym.Env):
 
         step_is_noop = True
         for deployment_id, action_id in action_pairs:
-            self.action_stats[action_id] += 1
+            if 0 <= action_id < self.num_actions:
+                self.action_stats[action_id] += 1
             self._actions[action_id].execute(self, deployment_id)
             if not self._actions[action_id].is_noop:
                 step_is_noop = False
 
+        self._last_step_noop = step_is_noop
         if step_is_noop:
             self.none_counter += 1
         else:
@@ -367,6 +372,15 @@ class BaseEnv(gym.Env):
                      self.current_step,
                      [self._actions[a].label for _, a in action_pairs],
                      self.none_counter)
+
+    def action_masks(self) -> list[bool]:
+        """Returns a boolean mask over a flattened space.
+        
+        Requires a Discrete action space. Each entry corresponds to:
+            flat_id = deployment_id * num_actions + action_id
+        """
+        return [action.can_execute(self, idx) for idx in range(self.num_apps)
+                 for action in self._actions]
 
     @property
     def reward(self) -> float:
@@ -393,28 +407,5 @@ class BaseEnv(gym.Env):
         Returns:
             gym.spaces.Box: The continuous multidimensional space representing the 
                 valid bounds of the observations.
-        """
-        raise NotImplementedError
-
-    def collect_obs(self, obs, date, latency):
-        """Buffers the current step's observations into memory.
-
-        This method should be called at every environment step. It appends
-        the state and metrics to an internal list (buffer) to avoid frequent
-        disk I/O.
-
-        Args:
-            obs: The observation vector from the environment state.
-            date: Timestamp string for the current step.
-            latency: The measured latency for the target deployment.
-        """
-        raise NotImplementedError
-
-    def save_obs_to_csv(self):
-        """Flushes the buffered episode observations to a CSV file.
-
-        This method should be called once at the end of an episode. It 
-        performs a bulk write of all buffered steps and should clear 
-        the internal buffer upon completion.
         """
         raise NotImplementedError

@@ -12,12 +12,13 @@ class SimulationStrategy(ABC):
 
     def __init__(self, **kwargs):
         """Initializes the simulation strategy and its random number generator.
-        
+
         Args:
-            **kwargs: Additional keyword arguments that can be passed to configure 
-                specific subclasses.
+            **kwargs: Additional keyword arguments that can be passed to configure
+                specific subclasses. Pass ``seed`` to make the RNG reproducible from
+                construction (otherwise the registry will call ``seed()`` shortly after).
         """
-        self.rng = np.random.default_rng()
+        self.rng = np.random.default_rng(kwargs.get("seed"))
 
     def seed(self, seed: Optional[int] = None) -> None:
         """Seeds the random number generator for reproducible results.

@@ -67,11 +67,14 @@ class CostStrategy(RewardStrategy):
     It penalizes inactivity (``none_counter``) when the cluster is not in the 
     desired state, forcing the agent to avoid sub-optimal states.
     """
+
     def calculate(self, env):
         reward = sum(1 for d in env.deployment_list if d.num_pods == d.desired_replicas)
 
         if reward != env.num_apps and env.none_counter > 2:
             reward = -env.none_counter
+        elif reward == 0 and getattr(env, "_last_step_noop", False):
+            reward = -1
         return reward
 
 class SmoothCostStrategy(RewardStrategy):
@@ -120,7 +123,7 @@ class SmoothCostStrategy(RewardStrategy):
                 needs_scaling = True
 
         if needs_scaling and env.none_counter > self.patience:
-            reward = -float(env.none_counter)
+            reward -= float(min(env.none_counter, 5))
         return reward
 
 class MultiObjectiveStrategy(RewardStrategy):

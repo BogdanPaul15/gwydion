@@ -7,13 +7,13 @@ env:
   prometheus_url: "YOUR_PROMETHEUS_URL_HERE"
   max_steps: 25
   waiting_period: 5
-  target_id: 9
-  dataset_version: v1
+  target_id: 0
+  dataset_version: v2
 
   simulation_strategy:
     type: default
 
-  action_space_type: vector
+  action_space_type: multi_discrete
   actions:
     - type: do_nothing
     - type: scale_up

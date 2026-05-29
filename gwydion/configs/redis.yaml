@@ -13,7 +13,7 @@ env:
   simulation_strategy:
     type: action_aware
 
-  action_space_type: vector
+  action_space_type: multi_discrete
   actions:
     - type: do_nothing
     - type: scale_up
@@ -62,7 +62,7 @@ deployments:
     scaling:
       cpu_weight: 0.7
       mem_weight: 0.3
-      threshold: 0.3
+      threshold: 0.75
 
   - name: redis-follower
     type: redis
@@ -80,4 +80,4 @@ deployments:
     scaling:
       cpu_weight: 0.7
       mem_weight: 0.3
-      threshold: 0.1
+      threshold: 0.75

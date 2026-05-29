@@ -1,10 +1,12 @@
 import argparse
 import logging
+import random
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -107,7 +109,12 @@ def main() -> None:
 	parser.add_argument("--tune", action="store_true", help="Run Optuna hyperparameter search.")
 	parser.add_argument("--n-trials", type=int, default=50, help="Optuna trials (with --tune).")
 	parser.add_argument("--out", default=None, help="Artifact output directory.")
+	parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
 	args = parser.parse_args()
+
+	random.seed(args.seed)
+	np.random.seed(args.seed)
+	torch.manual_seed(args.seed)
 
 	logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
@@ -115,7 +122,7 @@ def main() -> None:
 	out_dir = Path(args.out) if args.out else ARTIFACT_ROOT / app / args.model
 	out_dir.mkdir(parents=True, exist_ok=True)
 
-	trainer = build_trainer(args.model, args.config)
+	trainer = build_trainer(args.model, args.config, seed=args.seed)
 
 	if args.tune:
 		logger.info("Tuning %s with %d Optuna trials...", args.model, args.n_trials)
