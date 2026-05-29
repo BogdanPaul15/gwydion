@@ -213,6 +213,9 @@ class BaseEnv(gym.Env):
         """
         super().reset(seed=seed)
 
+        if not self.k8s and seed is not None:
+            self.simulation_strategy.seed(seed)
+
         self.current_step = 0
         self.none_counter = 0
         self.total_reward = 0
@@ -296,6 +299,12 @@ class BaseEnv(gym.Env):
             "avg_latency": float(np.mean(self.avg_latency)) if self.avg_latency else 0.0,
             "execution_time": float(elapsed),
             "latency": float(self.deployment_list[self._cfg["env"]["target_id"]].metrics["latency"]),
+            **{f"{d.name}_desired_replicas": float(d.desired_replicas)
+               for d in self.deployment_list},
+            **{f"{d.name}_traffic_in":  float(d.metrics["traffic_in"])
+               for d in self.deployment_list},
+            **{f"{d.name}_traffic_out": float(d.metrics["traffic_out"])
+               for d in self.deployment_list},
         }
 
         ob = self.get_state()

@@ -16,7 +16,7 @@ EPISODE_COLS = [
 	"phase", "run_id", "env_rank", "episode_idx",
 	"reward", "length", "wall_time",
 	"avg_pods", "avg_latency", "execution_time",
-	"total_reward", "action_stats",
+	"action_stats",
 ]
 
 class EpisodeMetricsWriter:
@@ -54,7 +54,7 @@ class EpisodeMetricsWriter:
 
 		Expects ``info["episode"]`` (set by SB3's ``Monitor`` wrapper) and
 		the extras the env adds at episode end (``avg_pods``, ``avg_latency``,
-		``execution_time``, ``total_reward``, ``action_stats``).
+		``execution_time``, ``action_stats``).
 		"""
 		ep = info.get("episode", {})
 		idx = self._counts_per_env.get(env_rank, 0)
@@ -71,7 +71,6 @@ class EpisodeMetricsWriter:
 			"avg_pods": float(info.get("avg_pods", 0.0)),
 			"avg_latency": float(info.get("avg_latency", 0.0)),
 			"execution_time": float(info.get("execution_time", 0.0)),
-			"total_reward": float(info.get("total_reward", 0.0)),
 			"action_stats": json.dumps(list(info.get("action_stats", []))),
 		}
 		self._buffer.append(row)
@@ -168,21 +167,28 @@ class StepObsWriter:
 		self._buffer: List[dict] = []
 		self._columns: Optional[List[str]] = None
 
-	def _ensure_columns(self, n_features: int) -> None:
+	def _ensure_columns(self, n_features: int,
+						 extra: Optional[Dict[str, Any]] = None) -> None:
 		if self._columns is not None:
 			return
 		feat = self._feature_names or [f"obs_{i}" for i in range(n_features)]
 		self._columns = ["step", "env_rank", "latency"] + list(feat)
+		if extra:
+			self._columns += list(extra.keys())
 
 	def record(self, step: int, env_rank: int,
-			   obs: Any, latency: float) -> None:
+			   obs: Any, latency: float,
+			   extra: Optional[Dict[str, Any]] = None) -> None:
 		"""Appends one observation row to the buffer."""
-		self._ensure_columns(len(obs))
+		self._ensure_columns(len(obs), extra)
 		row: Dict[str, Any] = {
 			"step": step, "env_rank": env_rank, "latency": latency,
 		}
-		for name, val in zip(self._columns[3:], obs):
+		obs_cols = self._columns[3: 3 + len(obs)]
+		for name, val in zip(obs_cols, obs):
 			row[name] = float(val)
+		if extra:
+			row.update(extra)
 		self._buffer.append(row)
 		if len(self._buffer) >= self.flush_every:
 			self.flush()
@@ -210,11 +216,15 @@ class StepObsCallback(BaseCallback):
 		for rank, (obs_row, info) in enumerate(zip(raw_obs_list, infos)):
 			if obs_row is None:
 				continue
+			EXTRA = ("_desired_replicas", "_traffic_in", "_traffic_out")
+			extra = {k: float(v) for k, v in info.items()
+					 if any(k.endswith(s) for s in EXTRA)}
 			self.writer.record(
 				step=self.num_timesteps,
 				env_rank=rank,
 				obs=obs_row,
 				latency=float(info.get("latency", 0.0)),
+				extra=extra or None,
 			)
 		return True
 

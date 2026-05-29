@@ -24,38 +24,34 @@ class Redis(BaseEnv):
         return spaces.Box(
             low=np.array([
                 leader.min_pods, # Number of pods -- leader
-                leader.min_pods, # Desired number of pods -- leader
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
-                0, # Traffic In (in KiB)
-                0, # Traffic Out (in KiB)
+                # 0, # Traffic In (in KiB)
+                # 0, # Traffic Out (in KiB)
                 # 0, # CPU forecast (in m)
                 # 0, # MEM forecast (in MiB)
                 follower.min_pods, # Number of pods -- follower
-                follower.min_pods, # Desired number of pods -- follower
                 0, # CPU Usage (in m)
                 0, # MEM Usage (in MiB)
-                0, # Traffic In (in KiB)
-                0, # Traffic Out (in KiB)
+                # 0, # Traffic In (in KiB)
+                # 0, # Traffic Out (in KiB)
                 # 0, # CPU forecast (in m)
                 # 0, # MEM forecast (in MiB)
                 0, # None counter
             ]),
             high=np.array([
                 leader.max_pods, # Number of pods -- leader
-                leader.max_pods, # Desired number of pods -- leader
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
-                20000, # Traffic In (in KiB)
-                20000, # Traffic Out (in KiB)
+                # 20000, # Traffic In (in KiB)
+                # 20000, # Traffic Out (in KiB)
                 # 1000, # CPU forecast (in m)
                 # 1000, # MEM forecast (in MiB)
                 follower.max_pods, # Number of pods -- follower
-                follower.max_pods, # Desired number of pods -- leader
                 1000, # CPU Usage (in m)
                 1000, # MEM Usage (in MiB)
-                20000, # Traffic In (in KiB)
-                20000, # Traffic Out (in KiB)
+                # 20000, # Traffic In (in KiB)
+                # 20000, # Traffic Out (in KiB)
                 # 1000, # CPU forecast (in m)
                 # 1000, # MEM forecast (in MiB)
                 25, # None counter
@@ -68,12 +64,12 @@ class Redis(BaseEnv):
         leader = self.deployment_list[ID_REDIS_LEADER].name
         follower = self.deployment_list[ID_REDIS_FOLLOWER].name
         return [
-            f"{leader}_num_pods", f"{leader}_desired_replicas",
+            f"{leader}_num_pods",
             f"{leader}_cpu_usage", f"{leader}_mem_usage",
-            f"{leader}_traffic_in", f"{leader}_traffic_out",
-            f"{follower}_num_pods", f"{follower}_desired_replicas",
+            # f"{leader}_traffic_in", f"{leader}_traffic_out",
+            f"{follower}_num_pods",
             f"{follower}_cpu_usage", f"{follower}_mem_usage",
-            f"{follower}_traffic_in", f"{follower}_traffic_out",
+            # f"{follower}_traffic_in", f"{follower}_traffic_out",
             "none_counter",
         ]
 
@@ -81,19 +77,17 @@ class Redis(BaseEnv):
         leader, follower = self.deployment_list[ID_REDIS_LEADER], self.deployment_list[ID_REDIS_FOLLOWER]
         return np.array([
             leader.num_pods,
-            leader.desired_replicas,
             leader.metrics["cpu_usage"],
             leader.metrics["mem_usage"],
-            leader.metrics["traffic_in"],
-            leader.metrics["traffic_out"],
+            # leader.metrics["traffic_in"],
+            # leader.metrics["traffic_out"],
             # leader.cpu_forecast, # CPU forecast (in m)
             # leader.mem_forecast, # MEM forecast (in MiB)
             follower.num_pods,
-            follower.desired_replicas,
             follower.metrics["cpu_usage"],
             follower.metrics["mem_usage"],
-            follower.metrics["traffic_in"],
-            follower.metrics["traffic_out"],
+            # follower.metrics["traffic_in"],
+            # follower.metrics["traffic_out"],
             # follower.cpu_forecast, # CPU forecast (in m)
             # follower.mem_forecast, # MEM forecast (in MiB)
             self.none_counter,

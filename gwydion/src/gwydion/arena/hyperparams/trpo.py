@@ -5,13 +5,13 @@ from .maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
 
 def sample_trpo_params(trial: optuna.Trial) -> dict[str, Any]:
     """Sample TRPO hyperparameters for one Optuna trial."""
-    n_steps_pow    = trial.suggest_int("n_steps_pow", 5, 12)
-    batch_size_pow = trial.suggest_int("batch_size_pow", 2, 10)
+    n_steps_pow    = trial.suggest_int("n_steps_pow", 8, 10)  # 256 to 1024
+    batch_size_pow = trial.suggest_int("batch_size_pow", 5, 8)  # 32 to 256
 
     one_minus_gamma      = trial.suggest_float("one_minus_gamma", 0.0001, 0.03, log=True)
     one_minus_gae_lambda = trial.suggest_float("one_minus_gae_lambda", 0.0001, 0.1, log=True)
 
-    learning_rate    = trial.suggest_float("learning_rate", 1e-5, 0.002, log=True)
+    learning_rate    = trial.suggest_float("learning_rate", 5e-5, 5e-4, log=True)
 
     n_critic_updates = trial.suggest_int("n_critic_updates", 5, 30)
     cg_max_steps     = trial.suggest_int("cg_max_steps", 5, 30)

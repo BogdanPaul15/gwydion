@@ -5,13 +5,13 @@ from .maps import ACTIVATION_FN_MAP, NET_ARCH_MAP
 
 def sample_a2c_params(trial: optuna.Trial) -> dict:
     """Sample A2C hyperparameters for one Optuna trial."""
-    n_steps_pow = trial.suggest_int("n_steps_pow", 2, 7) # 4 - 128
+    n_steps_pow = trial.suggest_int("n_steps_pow", 5, 8) # 32 - 256, episode=25 so >=25 needed
 
-    one_minus_gamma      = trial.suggest_float("one_minus_gamma", 0.0001, 0.05, log=True)
+    one_minus_gamma      = trial.suggest_float("one_minus_gamma", 0.0001, 0.03, log=True)
     one_minus_gae_lambda = trial.suggest_float("one_minus_gae_lambda", 0.0001, 0.1, log=True)
 
-    learning_rate = trial.suggest_float("learning_rate", 1e-5, 0.003, log=True)
-    ent_coef      = trial.suggest_float("ent_coef", 1e-8, 0.1, log=True)
+    learning_rate = trial.suggest_float("learning_rate", 5e-5, 5e-4, log=True)
+    ent_coef      = trial.suggest_float("ent_coef", 1e-4, 0.1, log=True) # floor raised to prevent premature determinism
     vf_coef       = trial.suggest_float("vf_coef", 0.1, 1.0)
     max_grad_norm = trial.suggest_float("max_grad_norm", 0.3, 2.0)
     rms_prop_eps  = trial.suggest_float("rms_prop_eps", 1e-6, 1e-3, log=True)

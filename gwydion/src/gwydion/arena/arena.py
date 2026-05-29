@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
-from matplotlib.pylab import gamma
+import numpy as np
 import optuna
 from stable_baselines3.common import vec_env
 from optuna.samplers import TPESampler
@@ -119,12 +119,14 @@ class Arena:
 			sampled = self.spec.sampler(trial)
 			converted = self.spec.converter(sampled, self.n_envs)
 			gamma = converted.get("gamma", 0.99)
+			trial_seed = self.seed + 1_000 * (trial.number + 1)
 
 			env = self.make_env(config_path, reward_strategy,
-								 training=True, gamma=gamma)
+								 training=True, gamma=gamma,
+								 seed_override=trial_seed)
 			eval_env = self.make_env(config_path, reward_strategy,
 									  training=False, gamma=gamma,
-									  n_envs_override=1)
+									  n_envs_override=1, seed_override=trial_seed)
 
 			try:
 				model = self.build_model(env, converted)
@@ -185,6 +187,8 @@ class Arena:
 								  steps=total_steps, label=run_label)
 
 		env = self.make_env(config_path, reward_strategy, training=True, gamma=gamma)
+
+		self.assert_discrete_if_maskable(env)
 
 		if resume_from:
 			model_path, stats_path = resume_from
@@ -250,6 +254,7 @@ class Arena:
 		env = self.make_env(config_path, reward_strategy,
 							 training=False, gamma=0.99, n_envs_override=1)
 		assert env.num_envs == 1, "Arena.test() must run with n_envs=1"
+		self.assert_discrete_if_maskable(env)
 		env = VecNormalize.load(stats_path, env.venv)
 		env.training = False
 		env.norm_reward = False
@@ -271,16 +276,24 @@ class Arena:
 		step = 0
 		obs = env.reset()
 		while completed < n_episodes:
-			action, _ = model.predict(obs, deterministic=deterministic)
+			predict_kwargs: Dict[str, Any] = {"deterministic": deterministic}
+			if self.spec.maskable:
+				masks = env.env_method("action_masks")
+				predict_kwargs["action_masks"] = np.array(masks)
+			action, _ = model.predict(obs, **predict_kwargs)
 			obs, _, _, infos = env.step(action)
 			step += 1
 			raw_obs_list = env.get_attr("last_obs") if obs_writer else None
 			for env_rank, info in enumerate(infos):
 				if obs_writer and raw_obs_list[env_rank] is not None:
+					EXTRA = ("_desired_replicas", "_traffic_in", "_traffic_out")
+					extra = {k: float(v) for k, v in info.items()
+							 if any(k.endswith(s) for s in EXTRA)}
 					obs_writer.record(
 						step=step, env_rank=env_rank,
 						obs=raw_obs_list[env_rank],
 						latency=float(info.get("latency", 0.0)),
+						extra=extra or None,
 					)
 				if "episode" in info:
 					writer.record(info, env_rank=env_rank)
@@ -298,15 +311,38 @@ class Arena:
 		logger.info("Test complete — summary %s", run_dir / "summary.json")
 		return summary
 
+	def assert_discrete_if_maskable(self, env) -> None:
+		"""Fail fast if a maskable algorithm is paired with a non-Discrete space.
+
+		Action masking is per ``(deployment, action)`` pair and cannot be
+		expressed per-dimension in MultiDiscrete or Vector spaces.
+		"""
+		if not self.spec.maskable:
+			return
+		from gymnasium import spaces
+		raw_space = (env.get_attr("action_space")[0]
+					 if hasattr(env, "get_attr") else env.action_space)
+		if not isinstance(raw_space, spaces.Discrete):
+			raise ValueError(
+				f"MaskablePPO requires action_space_type: discrete in the config "
+				f"(got {type(raw_space).__name__}). Action masking is per "
+				f"(deployment, action) pair and cannot be expressed per-dimension "
+				f"in MultiDiscrete or Vector spaces."
+			)
+
 	def make_env(self, config_path: str, reward_strategy: RewardStrategy,
 				  training: bool = True, gamma: float = 0.99,
-				  n_envs_override: Optional[int] = None) -> VecNormalize:
+				  n_envs_override: Optional[int] = None,
+				  seed_override: Optional[int] = None) -> VecNormalize:
 		"""Builds 1 or multiple envs wrapped in Monitor + VecNormalize.
 
 		Eval/test envs get a disjoint seed offset so they don't overlap with training.
+		``seed_override`` replaces ``self.seed`` as the base seed; tune passes a
+		per-trial value so parallel Optuna workers don't share env initial states.
 		"""
 		n = n_envs_override if n_envs_override is not None else self.n_envs
-		base_seed = self.seed if training else self.seed + 10_000
+		root_seed = seed_override if seed_override is not None else self.seed
+		base_seed = root_seed if training else root_seed + 10_000
 
 		def _factory(rank: int):
 			def _init():
@@ -342,15 +378,19 @@ class Arena:
 		"""Builds and creates a per-phase output directory tagged with the
 		reward strategy, the relevant phase tags, and a timestamp.
 
-		Tags are formatted as ``key=value`` and dot-separated:
+		Tags are formatted as ``key=value`` and comma-separated:
 		e.g., ``phase_dir("train", CostStrategy(), steps=200, label="default")``
-		yields ``train_CostStrategy_steps=200.label=default_<ts>``.
+		yields ``train_CostStrategy_steps=200,label=default_<ts>``.
+
+		The timestamp carries microsecond resolution so that parallel Optuna
+		workers (or rapid back-to-back runs) never collide on the same directory
+		and silently overwrite each other's metrics.
 		"""
-		ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+		ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 		parts = [phase, reward_strategy.__class__.__name__]
 		tag_parts = [f"{k}={v}" for k, v in tags.items() if v is not None]
 		if tag_parts:
-			parts.append(".".join(tag_parts))
+			parts.append(",".join(tag_parts))
 		parts.append(ts)
 		path = self.output_dir / "_".join(parts)
 		path.mkdir(parents=True, exist_ok=True)

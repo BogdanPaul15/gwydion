@@ -8,7 +8,7 @@ def sample_recurrent_ppo_params(trial: optuna.Trial) -> dict:
     sampled = sample_ppo_params(trial)
 
     sampled.update({
-        "lstm_hidden_size": trial.suggest_categorical("lstm_hidden_size", [16, 32, 64, 128, 256, 512]),
+        "lstm_hidden_size": trial.suggest_categorical("lstm_hidden_size", [16, 32, 64, 128]),
         "n_lstm_layers": trial.suggest_categorical("n_lstm_layers", [1, 2]),
         "enable_critic_lstm": trial.suggest_categorical("enable_critic_lstm", [True, False]),
     })
