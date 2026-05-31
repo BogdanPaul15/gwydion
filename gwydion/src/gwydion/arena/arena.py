@@ -90,9 +90,9 @@ class Arena:
 			during the study.
 		"""
 		pruner = pruner or optuna.pruners.MedianPruner(
-			n_startup_trials=4,
-			n_warmup_steps=150_000,
-			interval_steps=50_000,
+			n_startup_trials=5,
+			n_warmup_steps=30_000,
+			interval_steps=10_000,
 		)
 
 		if resume_from_dir:
@@ -133,7 +133,7 @@ class Arena:
 				pruning_cb = OptunaPruningCallback(
 					trial, eval_env,
 					n_eval_episodes=n_eval_episodes,
-					eval_freq=max(1, tune_steps // 5),
+					eval_freq=max(1, tune_steps // 10),
 					maskable=self.spec.maskable,
 				)
 				model.learn(total_timesteps=tune_steps, callback=pruning_cb)
