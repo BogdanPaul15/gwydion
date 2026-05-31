@@ -73,8 +73,6 @@ class CostStrategy(RewardStrategy):
 
         if reward != env.num_apps and env.none_counter > 2:
             reward = -env.none_counter
-        elif reward == 0 and getattr(env, "_last_step_noop", False):
-            reward = -1
         return reward
 
 class SmoothCostStrategy(RewardStrategy):

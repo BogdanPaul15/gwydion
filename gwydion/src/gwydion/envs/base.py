@@ -219,7 +219,6 @@ class BaseEnv(gym.Env):
         self.current_step = 0
         self.none_counter = 0
         self.total_reward = 0
-        self._last_step_noop = False
 
         self.terminated = False
         self.episode_over = False
@@ -362,7 +361,6 @@ class BaseEnv(gym.Env):
             if not self._actions[action_id].is_noop:
                 step_is_noop = False
 
-        self._last_step_noop = step_is_noop
         if step_is_noop:
             self.none_counter += 1
         else:
