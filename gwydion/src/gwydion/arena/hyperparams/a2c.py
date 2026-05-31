@@ -7,7 +7,7 @@ def sample_a2c_params(trial: optuna.Trial) -> dict:
     """Sample A2C hyperparameters for one Optuna trial."""
     n_steps_pow = trial.suggest_int("n_steps_pow", 5, 8) # 32 - 256, episode=25 so >=25 needed
 
-    one_minus_gamma      = trial.suggest_float("one_minus_gamma", 0.0001, 0.03, log=True)
+    one_minus_gamma      = trial.suggest_float("one_minus_gamma", 0.01, 0.2, log=True)
     one_minus_gae_lambda = trial.suggest_float("one_minus_gae_lambda", 0.0001, 0.1, log=True)
 
     learning_rate = trial.suggest_float("learning_rate", 5e-5, 5e-4, log=True)
