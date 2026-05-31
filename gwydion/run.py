@@ -20,7 +20,7 @@ USE_CASES = {
 }
 
 LATENCY_THRESHOLDS = {
-	"redis":          0.1,
+	"redis":          250.0,
 	"onlineboutique": 3000.0,
 }
 
