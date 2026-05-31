@@ -11,7 +11,7 @@ def linear_schedule(initial_value: float):
 
 def sample_ppo_params(trial: optuna.Trial) -> dict:
     """Sample PPO hyperparameters for one Optuna trial."""
-    batch_size_pow = trial.suggest_int("batch_size_p", 4, 6) # 32 to 256
+    batch_size_pow = trial.suggest_int("batch_size_pow", 4, 6) # 32 to 256
     n_steps_pow    = trial.suggest_int("n_steps_pow", 5, 7) # 256 to 1024
 
     # Discount factor - sampled as (1 - gamma) in log-scale
