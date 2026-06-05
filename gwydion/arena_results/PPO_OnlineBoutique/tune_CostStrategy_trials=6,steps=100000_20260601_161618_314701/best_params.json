@@ -1,0 +1,18 @@
+{
+  "best_value": 65.9,
+  "best_params": {
+    "batch_size_pow": 6,
+    "n_steps_pow": 5,
+    "one_minus_gamma": 0.1863766714944695,
+    "one_minus_gae_lambda": 0.0004954585652171171,
+    "learning_rate": 9.7309884365948e-05,
+    "lr_schedule": "constant",
+    "ent_coef": 5.8906575221340925e-08,
+    "clip_range": 0.3,
+    "n_epochs": 10,
+    "max_grad_norm": 0.5376582791943306,
+    "net_arch": "small",
+    "activation_fn": "relu"
+  },
+  "reward_strategy": "CostStrategy"
+}

@@ -1,0 +1,17 @@
+{
+  "best_value": -25089.625099999997,
+  "best_params": {
+    "n_steps_pow": 6,
+    "one_minus_gamma": 0.0814573320258006,
+    "one_minus_gae_lambda": 0.038585197041171006,
+    "learning_rate": 0.00027860408558435216,
+    "ent_coef": 0.00010423647051473822,
+    "vf_coef": 0.6413169480664681,
+    "max_grad_norm": 0.6212018339430655,
+    "rms_prop_eps": 0.0006139340184770284,
+    "use_rms_prop": false,
+    "net_arch": "medium",
+    "activation_fn": "tanh"
+  },
+  "reward_strategy": "LatencyStrategy"
+}
