@@ -1,0 +1,18 @@
+{
+  "best_value": -24364.0551,
+  "best_params": {
+    "batch_size_pow": 5,
+    "n_steps_pow": 7,
+    "one_minus_gamma": 0.08960785365368121,
+    "one_minus_gae_lambda": 0.006251373574521752,
+    "learning_rate": 7.161246859115129e-05,
+    "lr_schedule": "constant",
+    "ent_coef": 0.0015741890047456662,
+    "clip_range": 0.3,
+    "n_epochs": 5,
+    "max_grad_norm": 0.978936896513396,
+    "net_arch": "small",
+    "activation_fn": "relu"
+  },
+  "reward_strategy": "LatencyStrategy"
+}

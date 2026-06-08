@@ -1,0 +1,17 @@
+{
+  "best_value": 203.0666666,
+  "best_params": {
+    "n_steps_pow": 5,
+    "one_minus_gamma": 0.1760758857819994,
+    "one_minus_gae_lambda": 0.06761641816415334,
+    "learning_rate": 0.00038088536472230674,
+    "ent_coef": 0.008694241255511197,
+    "vf_coef": 0.2924423309175477,
+    "max_grad_norm": 1.3826144234716267,
+    "rms_prop_eps": 2.614801683782331e-06,
+    "use_rms_prop": false,
+    "net_arch": "medium",
+    "activation_fn": "tanh"
+  },
+  "reward_strategy": "SmoothCostStrategy"
+}
