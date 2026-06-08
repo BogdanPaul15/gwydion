@@ -102,6 +102,10 @@ def parser() -> argparse.ArgumentParser:
 
 	p.add_argument("--record-step-obs", action="store_true",
 				   help="Save raw per-step observations to step_obs.csv.")
+	p.add_argument("--stochastic", action="store_true",
+				   help="Sample actions from the policy instead of taking the "
+						"deterministic argmax (test phase). Useful for probing "
+						"less-collapsed earlier checkpoints.")
 	return p
 
 def main() -> None:
@@ -172,6 +176,7 @@ def main() -> None:
 			n_episodes=args.n_episodes,
 			run_label=args.run_label,
 			record_step_obs=args.record_step_obs,
+			deterministic=not args.stochastic,
 		)
 
 if __name__ == "__main__":

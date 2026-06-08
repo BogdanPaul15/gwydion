@@ -238,8 +238,12 @@ class BaseEnv(gym.Env):
                                                      self._env_cfg["host"], self._env_cfg["token"],
                                                      self._env_cfg["prometheus_url"])
 
-        for deployment in self.deployment_list:
-            deployment.initialize_metrics()
+        if self.k8s:
+            for deployment in self.deployment_list:
+                deployment.update_obs_k8s()
+        else:
+            for deployment in self.deployment_list:
+                deployment.initialize_metrics()
 
         # Note: Child class will implement the actual return.
         # This is a structural placeholder

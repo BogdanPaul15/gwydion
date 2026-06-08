@@ -56,16 +56,16 @@ class OnlineBoutiqueDeployment(Deployment):
 
         queries = {
             "cpu_usage": f"sum(irate(container_cpu_usage_seconds_total{{{base}}}[5m]))",
-            "mem_usage": f"sum(container_memory_working_set_bytes{{{base}}})",
+            "mem_usage": f"sum(irate(container_memory_working_set_bytes{{{base}}}[5m]))",
             "traffic_in": f"sum(irate(container_network_receive_bytes_total{{{base}}}[5m]))",
             "traffic_out": f"sum(irate(container_network_transmit_bytes_total{{{base}}}[5m]))",
         }
 
         transforms = {
             "cpu_usage": lambda v: int(float(v) * 1000),
-            "mem_usage": lambda v: int(float(v) / 1_048_576),
-            "traffic_in": lambda v: int(float(v) / 1_024),
-            "traffic_out": lambda v: int(float(v) / 1_024),
+            "mem_usage": lambda v: int(float(v) / 1_000_000), # 1_048_576
+            "traffic_in": lambda v: int(float(v) / 1_000), # 1_024
+            "traffic_out": lambda v: int(float(v) / 1_000), # 1_024
         }
 
         for key, query in queries.items():
