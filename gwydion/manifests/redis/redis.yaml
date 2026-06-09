@@ -119,20 +119,19 @@ data:
 
     LEADER_HOST="${LEADER_HOST:-redis-leader.redis.svc}"
     PORT="${REDIS_PORT:-6379}"
-    RANDOM=42
+
+    STEP_SECONDS="${LOAD_STEP_SECONDS:-120}"
+    LEVELS=(${LOAD_LEVELS:-50 200 500 200})   # concurrent clients per step
 
     echo "Redis-bench starting..."
-    echo "Target: $LEADER_HOST:$PORT"
+    echo "Target: $LEADER_HOST:$PORT   step=${STEP_SECONDS}s   levels=${LEVELS[*]}"
 
     while true; do
-      CLIENTS=$(( RANDOM % 5000 + 10 ))
-      SLEEP=$(( RANDOM % 60 + 1 ))
-
-      echo "clients=$CLIENTS  next sleep=${SLEEP}s"
-      redis-benchmark -h "$LEADER_HOST" -p "$PORT" -q -n "$CLIENTS"
-
-      echo "Sleeping ${SLEEP}s..."
-      sleep "$SLEEP"
+      for C in "${LEVELS[@]}"; do
+        echo "load: ${C} concurrent clients for ${STEP_SECONDS}s"
+        timeout "${STEP_SECONDS}s" redis-benchmark -h "$LEADER_HOST" -p "$PORT" \
+            -c "$C" -n 100000000 -q -t get,set >/dev/null 2>&1 || true
+      done
     done
 
 ---
@@ -162,6 +161,10 @@ spec:
               value: "redis-leader.redis.svc"
             - name: REDIS_PORT
               value: "6379"
+            - name: LOAD_STEP_SECONDS
+              value: "120"
+            - name: LOAD_LEVELS
+              value: "50 200 500 200"
           resources:
             requests:
               cpu: 100m
