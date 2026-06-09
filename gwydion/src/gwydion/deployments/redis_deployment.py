@@ -56,7 +56,7 @@ class RedisDeployment(Deployment):
 
         queries = {
             "cpu_usage": f"sum(irate(container_cpu_usage_seconds_total{{{base}}}[5m]))",
-            "mem_usage": f"sum(irate(container_memory_working_set_bytes{{{base}}}[5m]))",
+            "mem_usage": f"sum(container_memory_working_set_bytes{{{base}}})",
             # "traffic_in": f"sum(irate(redis_net_input_bytes_total{{job=~'{self.name}-exporter.*'}}[5m]))",
             # "traffic_out": f"sum(irate(redis_net_output_bytes_total{{job=~'{self.name}-exporter.*'}}[5m]))",
         }

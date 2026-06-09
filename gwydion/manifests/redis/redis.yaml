@@ -168,6 +168,8 @@ spec:
           env:
             - name: LEADER_HOST
               value: "redis-leader.redis.svc"
+            - name: FOLLOWER_HOST
+              value: "redis-follower.redis.svc"
             - name: REDIS_PORT
               value: "6379"
             - name: LOAD_STEP_SECONDS
