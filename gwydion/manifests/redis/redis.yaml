@@ -118,22 +118,31 @@ data:
     #!/bin/bash
 
     LEADER_HOST="${LEADER_HOST:-redis-leader.redis.svc}"
+    FOLLOWER_HOST="${FOLLOWER_HOST:-redis-follower.redis.svc}"
     PORT="${REDIS_PORT:-6379}"
 
-    STEP_SECONDS="${LOAD_STEP_SECONDS:-120}"
-    LEVELS=(${LOAD_LEVELS:-50 200 500 200})   # concurrent clients per step
+    STEP_SECONDS="${LOAD_STEP_SECONDS:-30}"
+    LEVELS=(${LOAD_LEVELS:-1400 2500 3400 2500})   # concurrent clients per step
 
     echo "Redis-bench starting..."
-    echo "Target: $LEADER_HOST:$PORT   step=${STEP_SECONDS}s   levels=${LEVELS[*]}"
-
+    echo "Leader Target: $LEADER_HOST:$PORT"
+    echo "Follower Target: $FOLLOWER_HOST:$PORT"
+    
     while true; do
       for C in "${LEVELS[@]}"; do
         echo "load: ${C} concurrent clients for ${STEP_SECONDS}s"
+        
+        # Send SET (writes) to the Leader in the background
         timeout "${STEP_SECONDS}s" redis-benchmark -h "$LEADER_HOST" -p "$PORT" \
-            -c "$C" -n 100000000 -q -t get,set >/dev/null 2>&1 || true
+            -c "$C" -n 100000000 -q -t set >/dev/null 2>&1 || true &
+            
+        # Send GET (reads) to the Follower
+        timeout "${STEP_SECONDS}s" redis-benchmark -h "$FOLLOWER_HOST" -p "$PORT" \
+            -c "$C" -n 100000000 -q -t get >/dev/null 2>&1 || true
+            
+        wait
       done
     done
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -162,9 +171,9 @@ spec:
             - name: REDIS_PORT
               value: "6379"
             - name: LOAD_STEP_SECONDS
-              value: "120"
+              value: "30"
             - name: LOAD_LEVELS
-              value: "50 200 500 200"
+              value: "1400 2500 3400 2500"
           resources:
             requests:
               cpu: 100m

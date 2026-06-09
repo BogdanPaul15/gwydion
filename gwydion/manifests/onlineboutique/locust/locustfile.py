@@ -85,7 +85,7 @@ class CyclicStepShape(LoadTestShape):
 
     min_users = int(os.environ.get("LOAD_MIN_USERS", "10"))
     max_users = int(os.environ.get("LOAD_MAX_USERS", "150"))
-    step_seconds = int(os.environ.get("LOAD_STEP_SECONDS", "120"))
+    step_seconds = int(os.environ.get("LOAD_STEP_SECONDS", "30"))
     spawn_rate = int(os.environ.get("LOAD_SPAWN_RATE", "20"))
 
     def __init__(self, *args, **kwargs):

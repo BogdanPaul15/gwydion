@@ -124,7 +124,7 @@ spec:
         - name: LOAD_MAX_USERS
           value: "150"
         - name: LOAD_STEP_SECONDS
-          value: "120"
+          value: "30"
         - name: LOAD_SPAWN_RATE
           value: "20"
         resources:

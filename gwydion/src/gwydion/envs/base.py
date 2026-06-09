@@ -279,6 +279,9 @@ class BaseEnv(gym.Env):
         if self.k8s:
             any_scaling = any(not self._actions[a].is_noop for _, a in action_pairs)
             if any_scaling and not (self.constraint_min_pod_replicas or self.constraint_max_pod_replicas):
+                # Handling cold start of pods
+                self._wait_for_rollout(timeout=120)
+            else:
                 time.sleep(self.waiting_period)
 
             for d in self.deployment_list:
@@ -388,6 +391,33 @@ class BaseEnv(gym.Env):
     def reward(self) -> float:
         """Returns the current reward as computed by the reward strategy."""
         return self.reward_strategy.get_reward(self)
+
+    def _wait_for_rollout(self, timeout: int = 120) -> None:
+        """Block until every deployment's ready_replicas matches its spec replicas.
+
+        Polls every ``waiting_period`` seconds. Falls back gracefully if the k8s
+        API returns None (e.g. the deployment is still being patched). Only called
+        in cluster mode after a scaling action.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            all_ready = True
+            for d in self.deployment_list:
+                try:
+                    obj = d.apps_v1.read_namespaced_deployment(
+                        name=d.name, namespace=d.namespace)
+                    desired = obj.spec.replicas or 0
+                    ready = obj.status.ready_replicas or 0
+                    if ready < desired:
+                        all_ready = False
+                        break
+                except Exception:
+                    all_ready = False
+                    break
+            if all_ready:
+                return
+            time.sleep(self.waiting_period)
+        logger.warning("_wait_for_rollout: timed out after %ds", timeout)
 
     def get_state(self) -> np.ndarray:
         """Returns the current state of the environment.

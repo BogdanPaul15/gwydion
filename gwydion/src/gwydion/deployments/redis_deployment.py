@@ -57,15 +57,15 @@ class RedisDeployment(Deployment):
         queries = {
             "cpu_usage": f"sum(irate(container_cpu_usage_seconds_total{{{base}}}[5m]))",
             "mem_usage": f"sum(irate(container_memory_working_set_bytes{{{base}}}[5m]))",
-            "traffic_in": f"sum(irate(redis_net_input_bytes_total{{job=~'{self.name}-exporter.*'}}[5m]))",
-            "traffic_out": f"sum(irate(redis_net_output_bytes_total{{job=~'{self.name}-exporter.*'}}[5m]))",
+            # "traffic_in": f"sum(irate(redis_net_input_bytes_total{{job=~'{self.name}-exporter.*'}}[5m]))",
+            # "traffic_out": f"sum(irate(redis_net_output_bytes_total{{job=~'{self.name}-exporter.*'}}[5m]))",
         }
 
         transforms = {
             "cpu_usage": lambda v: int(float(v) * 1000),
             "mem_usage": lambda v: int(float(v) / 1_000_000), # 1_048_576
-            "traffic_in": lambda v: int(float(v) / 1_000), # 1_024
-            "traffic_out": lambda v: int(float(v) / 1_000), # 1_024
+            # "traffic_in": lambda v: int(float(v) / 1_000), # 1_024
+            # "traffic_out": lambda v: int(float(v) / 1_000), # 1_024
         }
 
         for key, query in queries.items():
@@ -84,7 +84,8 @@ class RedisDeployment(Deployment):
 
         res = self.fetch_prom(query_latency)
         if res:
-            self.metrics["latency"] = round(float(res[0]["value"][1]) * 1000, 3)
+            val = float(res[0]["value"][1])
+            self.metrics["latency"] = round(val * 1000, 3) if math.isfinite(val) else 0.0
         else:
             logger.debug("No latency data for %s, setting to 0.0", self.name)
             self.metrics["latency"] = 0.0
