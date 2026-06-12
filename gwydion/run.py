@@ -165,8 +165,8 @@ def main() -> None:
 			record_step_obs=args.record_step_obs,
 		)
 	elif args.phase == "test":
-		if not (args.model and args.stats):
-			print("--model and --stats are required for --phase test", file=sys.stderr)
+		if not args.model:
+			print("--model is required for --phase test", file=sys.stderr)
 			sys.exit(2)
 		arena.test(
 			config_path=config_path,

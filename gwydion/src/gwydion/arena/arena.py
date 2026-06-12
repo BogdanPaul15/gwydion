@@ -237,7 +237,7 @@ class Arena:
 		return str(model_path), str(stats_path)
 
 	def test(self, config_path: str, reward_strategy: RewardStrategy,
-			 model_path: str, stats_path: str,
+			 model_path: str, stats_path: Optional[str] = None,
 			 n_episodes: int = 100, run_label: Optional[str] = None,
 			 deterministic: bool = True,
 			 record_step_obs: bool = False,
@@ -246,6 +246,9 @@ class Arena:
 
 		Records each episode to ``episodes.csv`` with ``phase="test"``
 		and returns the summary dict.
+
+		When ``stats_path`` is None the env is wrapped with a passthrough
+		VecNormalize (no obs/reward normalisation).
 		"""
 		run_label = run_label or "default"
 		run_dir = self.phase_dir("test", reward_strategy,
@@ -255,7 +258,10 @@ class Arena:
 							 training=False, gamma=0.99, n_envs_override=1)
 		assert env.num_envs == 1, "Arena.test() must run with n_envs=1"
 		self.assert_discrete_if_maskable(env)
-		env = VecNormalize.load(stats_path, env.venv)
+		if stats_path is not None:
+			env = VecNormalize.load(stats_path, env.venv)
+		else:
+			env = VecNormalize(env.venv, norm_obs=False, norm_reward=False)
 		env.training = False
 		env.norm_reward = False
 
