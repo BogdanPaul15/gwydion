@@ -31,13 +31,14 @@ class VARIMATrainer(BaseTrainer):
 
 	model_key = "varima"
 
-	def __init__(self, config_path: str) -> None:
+	def __init__(self, config_path: str, seed: int = 42) -> None:
 		"""Loads data and builds the standardized endogenous/exogenous arrays.
 
 		Args:
 			config_path (str): Path to the trainer YAML config.
+			seed (int): Random seed for reproducibility. Defaults to 42.
 		"""
-		super().__init__(config_path)
+		super().__init__(config_path, seed=seed)
 
 		params = dict(DEFAULT_PARAMS)
 		params.update(self.model_params.get("defaults", {}))

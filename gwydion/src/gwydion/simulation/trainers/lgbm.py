@@ -40,13 +40,14 @@ class LGBMTrainer(BaseTrainer):
 
 	model_key = "lgbm"
 
-	def __init__(self, config_path: str) -> None:
+	def __init__(self, config_path: str, seed: int = 42) -> None:
 		"""Loads data and builds the dataset table for each split.
 
 		Args:
 			config_path (str): Path to the trainer YAML config.
+			seed (int): Random seed for reproducibility. Defaults to 42.
 		"""
-		super().__init__(config_path)
+		super().__init__(config_path, seed=seed)
 
 		self._model: Optional[MultiOutputRegressor] = None
 
@@ -61,6 +62,14 @@ class LGBMTrainer(BaseTrainer):
 		self.x_train, self.y_train = full_x[:i_train], full_y[:i_train]
 		self.x_val, self.y_val = full_x[i_train:i_val], full_y[i_train:i_val]
 		self.x_test, self.y_test = full_x[i_val:], full_y[i_val:]
+
+		# Per-target robust scale (IQR) used to normalise the tuning objective so
+		# that small-scaled targets (cpu, mem) are not drowned out by the
+		# large ones (latency).
+		q25, q75 = np.percentile(self.y_train, [25, 75], axis=0)
+		iqr = q75 - q25
+		std = self.y_train.std(axis=0)
+		self._target_scale = np.where(iqr > 0, iqr, np.where(std > 0, std, 1.0))
 
 	def _build_regressor(self, params: dict) -> MultiOutputRegressor:
 		"""Wraps a LightGBM regressor (with the given params) for multi-output use."""
@@ -135,7 +144,8 @@ class LGBMTrainer(BaseTrainer):
 			model = self._build_regressor(params)
 			model.fit(self.x_train, self.y_train)
 			pred = model.predict(self.x_val)
-			return float(np.sqrt(np.mean((self.y_val - pred) ** 2)))
+			err = (self.y_val - pred) / self._target_scale
+			return float(np.sqrt(np.mean(err ** 2)))
 
 		study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
 		self.best_params = study.best_params
