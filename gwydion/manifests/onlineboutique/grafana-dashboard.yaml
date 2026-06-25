@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gwydion-agent-dashboard
+  namespace: onlineboutique
+  labels:
+    grafana_dashboard: "1"
+data:
+  gwydion-agent.json: |
+    {
+      "title": "RL Auto-scaling Agent (live)",
+      "uid": "gwydion-agent",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "refresh": "5s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Total pods",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+          "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" } },
+          "targets": [ { "expr": "gwydion_total_pods", "refId": "A" } ]
+        },
+        {
+          "type": "stat",
+          "title": "Episode",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 5, "w": 3, "x": 6, "y": 0 },
+          "targets": [ { "expr": "gwydion_episode", "refId": "A" } ]
+        },
+        {
+          "type": "stat",
+          "title": "Step",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 5, "w": 3, "x": 9, "y": 0 },
+          "targets": [ { "expr": "gwydion_step", "refId": "A" } ]
+        },
+        {
+          "type": "stat",
+          "title": "Episode reward",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+          "fieldConfig": { "defaults": { "color": { "mode": "continuous-GrYlRd" } } },
+          "targets": [ { "expr": "gwydion_episode_reward", "refId": "A" } ]
+        },
+        {
+          "type": "stat",
+          "title": "Latency",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+          "fieldConfig": { "defaults": { "unit": "ms" } },
+          "targets": [ { "expr": "gwydion_latency_ms", "refId": "A" } ]
+        },
+        {
+          "type": "timeseries",
+          "options": { "legend": { "displayMode": "list", "placement": "right" } },
+          "title": "Pods per deployment",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 9, "w": 24, "x": 0, "y": 5 },
+          "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 10, "stacking": { "mode": "none" } }, "unit": "short" } },
+          "targets": [ { "expr": "gwydion_pods", "legendFormat": "{{deployment}}", "refId": "A" } ]
+        },
+        {
+          "type": "timeseries",
+          "options": { "legend": { "displayMode": "list", "placement": "right" } },
+          "title": "Desired vs actual replicas",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 9, "w": 24, "x": 0, "y": 14 },
+          "fieldConfig": {
+            "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 0 } },
+            "overrides": [
+              { "matcher": { "id": "byFrameRefID", "options": "B" }, "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [6, 4] } } ] }
+            ]
+          },
+          "targets": [
+            { "expr": "gwydion_pods", "legendFormat": "actual — {{deployment}}", "refId": "A" },
+            { "expr": "gwydion_desired_replicas", "legendFormat": "desired — {{deployment}}", "refId": "B" }
+          ]
+        },
+        {
+          "type": "heatmap",
+          "title": "Pods heatmap",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 9, "w": 24, "x": 0, "y": 23 },
+          "options": {
+            "calculate": false,
+            "yAxis": { "axisLabel": "deployment", "unit": "short" },
+            "color": { "scheme": "Greens", "fill": "dark-green", "mode": "scheme" },
+            "cellGap": 2,
+            "tooltip": { "show": true, "yHistogram": false }
+          },
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "targets": [ { "expr": "gwydion_pods", "legendFormat": "{{deployment}}", "refId": "A" } ]
+        },
+        {
+          "type": "timeseries",
+          "options": { "legend": { "displayMode": "list", "placement": "right" } },
+          "title": "CPU usage (millicores)",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+          "targets": [ { "expr": "gwydion_cpu_usage_millicores", "legendFormat": "{{deployment}}", "refId": "A" } ]
+        },
+        {
+          "type": "timeseries",
+          "options": { "legend": { "displayMode": "list", "placement": "right" } },
+          "title": "Memory usage (MB)",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+          "fieldConfig": { "defaults": { "unit": "decmbytes", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+          "targets": [ { "expr": "gwydion_mem_usage_mb", "legendFormat": "{{deployment}}", "refId": "A" } ]
+        },
+        {
+          "type": "timeseries",
+          "options": { "legend": { "displayMode": "list", "placement": "right" } },
+          "title": "Reward",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+          "targets": [
+            { "expr": "gwydion_step_reward", "legendFormat": "step reward", "refId": "A" },
+            { "expr": "gwydion_episode_reward", "legendFormat": "episode reward", "refId": "B" }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "options": { "legend": { "displayMode": "list", "placement": "right" } },
+          "title": "Total scaling events (cumulative)",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter" } } },
+          "targets": [ { "expr": "gwydion_scale_events_total", "legendFormat": "{{deployment}}", "refId": "A" } ]
+        },
+        {
+          "type": "timeseries",
+          "options": { "legend": { "displayMode": "list", "placement": "right" } },
+          "title": "Locust load",
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
+          "fieldConfig": {
+            "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10 } },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "active users" }, "properties": [ { "id": "unit", "value": "short" }, { "id": "custom.fillOpacity", "value": 0 }, { "id": "custom.lineStyle", "value": { "fill": "dash" } } ] },
+              { "matcher": { "id": "byName", "options": "failures/s" }, "properties": [ { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } } ] }
+            ]
+          },
+          "targets": [
+            { "expr": "locust_requests_current_rps{name='Aggregated'}", "legendFormat": "RPS", "refId": "A" },
+            { "expr": "locust_users", "legendFormat": "active users", "refId": "B" },
+            { "expr": "locust_requests_current_fail_per_sec{name='Aggregated'}", "legendFormat": "failures/s", "refId": "C" }
+          ]
+        }
+      ]
+    }

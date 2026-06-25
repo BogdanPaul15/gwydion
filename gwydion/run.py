@@ -102,6 +102,11 @@ def parser() -> argparse.ArgumentParser:
 
 	p.add_argument("--record-step-obs", action="store_true",
 				   help="Save raw per-step observations to step_obs.csv.")
+	p.add_argument("--live-metrics", action="store_true",
+				   help="Expose live agent metrics (pods, observations, reward, "
+						"scaling events) on a Prometheus endpoint (test phase).")
+	p.add_argument("--live-port", type=int, default=8000,
+				   help="Port for the live metrics endpoint (default: 8000).")
 	p.add_argument("--stochastic", action="store_true",
 				   help="Sample actions from the policy instead of taking the "
 						"deterministic argmax (test phase). Useful for probing "
@@ -177,6 +182,8 @@ def main() -> None:
 			run_label=args.run_label,
 			record_step_obs=args.record_step_obs,
 			deterministic=not args.stochastic,
+			live_metrics=args.live_metrics,
+			live_port=args.live_port,
 		)
 
 if __name__ == "__main__":
