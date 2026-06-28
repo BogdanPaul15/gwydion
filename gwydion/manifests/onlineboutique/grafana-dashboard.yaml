@@ -32,6 +32,7 @@ data:
           "title": "Total pods",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "unit": "short" } },
           "targets": [ { "expr": "gwydion_total_pods", "refId": "A" } ]
         },
@@ -40,6 +41,7 @@ data:
           "title": "Episode",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 5, "w": 3, "x": 6, "y": 0 },
+          "interval": "2s",
           "targets": [ { "expr": "gwydion_episode", "refId": "A" } ]
         },
         {
@@ -47,6 +49,7 @@ data:
           "title": "Step",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 5, "w": 3, "x": 9, "y": 0 },
+          "interval": "2s",
           "targets": [ { "expr": "gwydion_step", "refId": "A" } ]
         },
         {
@@ -54,6 +57,7 @@ data:
           "title": "Episode reward",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "color": { "mode": "continuous-GrYlRd" } } },
           "targets": [ { "expr": "gwydion_episode_reward", "refId": "A" } ]
         },
@@ -62,6 +66,7 @@ data:
           "title": "Latency",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "unit": "ms" } },
           "targets": [ { "expr": "gwydion_latency_ms", "refId": "A" } ]
         },
@@ -71,6 +76,7 @@ data:
           "title": "Pods per deployment",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 9, "w": 24, "x": 0, "y": 5 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 10, "stacking": { "mode": "none" } }, "unit": "short" } },
           "targets": [ { "expr": "gwydion_pods", "legendFormat": "{{deployment}}", "refId": "A" } ]
         },
@@ -80,6 +86,7 @@ data:
           "title": "Desired vs actual replicas",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 9, "w": 24, "x": 0, "y": 14 },
+          "interval": "2s",
           "fieldConfig": {
             "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "fillOpacity": 0 } },
             "overrides": [
@@ -96,6 +103,7 @@ data:
           "title": "Pods heatmap",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 9, "w": 24, "x": 0, "y": 23 },
+          "interval": "2s",
           "options": {
             "calculate": false,
             "yAxis": { "axisLabel": "deployment", "unit": "short" },
@@ -112,6 +120,7 @@ data:
           "title": "CPU usage (millicores)",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
           "targets": [ { "expr": "gwydion_cpu_usage_millicores", "legendFormat": "{{deployment}}", "refId": "A" } ]
         },
@@ -121,6 +130,7 @@ data:
           "title": "Memory usage (MB)",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "unit": "decmbytes", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
           "targets": [ { "expr": "gwydion_mem_usage_mb", "legendFormat": "{{deployment}}", "refId": "A" } ]
         },
@@ -130,6 +140,7 @@ data:
           "title": "Reward",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
           "targets": [
             { "expr": "gwydion_step_reward", "legendFormat": "step reward", "refId": "A" },
@@ -139,9 +150,10 @@ data:
         {
           "type": "timeseries",
           "options": { "legend": { "displayMode": "list", "placement": "right" } },
-          "title": "Total scaling events (cumulative)",
+          "title": "Pods scaled (cumulative)",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+          "interval": "2s",
           "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter" } } },
           "targets": [ { "expr": "gwydion_scale_events_total", "legendFormat": "{{deployment}}", "refId": "A" } ]
         },
@@ -151,6 +163,7 @@ data:
           "title": "Locust load",
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
+          "interval": "2s",
           "fieldConfig": {
             "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10 } },
             "overrides": [

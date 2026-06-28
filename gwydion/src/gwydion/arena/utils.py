@@ -159,7 +159,7 @@ class StepObsWriter:
 
 	def __init__(self, out_path: Path,
 				 feature_names: Optional[List[str]] = None,
-				 flush_every: int = 200):
+				 flush_every: int = 25):
 		self.out_path = Path(out_path)
 		self.out_path.parent.mkdir(parents=True, exist_ok=True)
 		self._feature_names = feature_names
