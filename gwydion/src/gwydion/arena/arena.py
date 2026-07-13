@@ -237,15 +237,19 @@ class Arena:
 		return str(model_path), str(stats_path)
 
 	def test(self, config_path: str, reward_strategy: RewardStrategy,
-			 model_path: str, stats_path: str,
+			 model_path: str, stats_path: Optional[str] = None,
 			 n_episodes: int = 100, run_label: Optional[str] = None,
 			 deterministic: bool = True,
 			 record_step_obs: bool = False,
-			 obs_feature_names: Optional[List[str]] = None) -> dict:
+			 obs_feature_names: Optional[List[str]] = None,
+			 live_metrics: bool = False, live_port: int = 8000) -> dict:
 		"""Runs the trained model on the cluster (or any per-phase config).
 
 		Records each episode to ``episodes.csv`` with ``phase="test"``
 		and returns the summary dict.
+
+		When ``stats_path`` is None the env is wrapped with a passthrough
+		VecNormalize (no obs/reward normalisation).
 		"""
 		run_label = run_label or "default"
 		run_dir = self.phase_dir("test", reward_strategy,
@@ -255,7 +259,10 @@ class Arena:
 							 training=False, gamma=0.99, n_envs_override=1)
 		assert env.num_envs == 1, "Arena.test() must run with n_envs=1"
 		self.assert_discrete_if_maskable(env)
-		env = VecNormalize.load(stats_path, env.venv)
+		if stats_path is not None:
+			env = VecNormalize.load(stats_path, env.venv)
+		else:
+			env = VecNormalize(env.venv, norm_obs=False, norm_reward=False)
 		env.training = False
 		env.norm_reward = False
 
@@ -272,17 +279,27 @@ class Arena:
 			feature_names=obs_feature_names or env.get_attr("obs_feature_names")[0],
 		) if record_step_obs else None
 
+		exporter = None
+		if live_metrics:
+			from gwydion.monitoring import LiveMetricsExporter
+			exporter = LiveMetricsExporter(port=live_port)
+			exporter.start()
+
 		completed = 0
 		step = 0
 		obs = env.reset()
+		if exporter is not None:
+			exporter.update(env, None)
 		while completed < n_episodes:
 			predict_kwargs: Dict[str, Any] = {"deterministic": deterministic}
 			if self.spec.maskable:
 				masks = env.env_method("action_masks")
 				predict_kwargs["action_masks"] = np.array(masks)
 			action, _ = model.predict(obs, **predict_kwargs)
-			obs, _, _, infos = env.step(action)
+			obs, rewards, _, infos = env.step(action)
 			step += 1
+			if exporter is not None:
+				exporter.update(env, float(rewards[0]))
 			raw_obs_list = env.get_attr("last_obs") if obs_writer else None
 			for env_rank, info in enumerate(infos):
 				if obs_writer and raw_obs_list[env_rank] is not None:
@@ -346,7 +363,6 @@ class Arena:
 
 		def _factory(rank: int):
 			def _init():
-				logging.getLogger().setLevel(logging.ERROR)
 				env = self.env_cls(
 					config_path=config_path,
 					reward_strategy=reward_strategy,

@@ -102,6 +102,15 @@ def parser() -> argparse.ArgumentParser:
 
 	p.add_argument("--record-step-obs", action="store_true",
 				   help="Save raw per-step observations to step_obs.csv.")
+	p.add_argument("--live-metrics", action="store_true",
+				   help="Expose live agent metrics (pods, observations, reward, "
+						"scaling events) on a Prometheus endpoint (test phase).")
+	p.add_argument("--live-port", type=int, default=8000,
+				   help="Port for the live metrics endpoint (default: 8000).")
+	p.add_argument("--stochastic", action="store_true",
+				   help="Sample actions from the policy instead of taking the "
+						"deterministic argmax (test phase). Useful for probing "
+						"less-collapsed earlier checkpoints.")
 	return p
 
 def main() -> None:
@@ -161,8 +170,8 @@ def main() -> None:
 			record_step_obs=args.record_step_obs,
 		)
 	elif args.phase == "test":
-		if not (args.model and args.stats):
-			print("--model and --stats are required for --phase test", file=sys.stderr)
+		if not args.model:
+			print("--model is required for --phase test", file=sys.stderr)
 			sys.exit(2)
 		arena.test(
 			config_path=config_path,
@@ -172,6 +181,9 @@ def main() -> None:
 			n_episodes=args.n_episodes,
 			run_label=args.run_label,
 			record_step_obs=args.record_step_obs,
+			deterministic=not args.stochastic,
+			live_metrics=args.live_metrics,
+			live_port=args.live_port,
 		)
 
 if __name__ == "__main__":

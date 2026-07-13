@@ -128,7 +128,7 @@ class BaseTrainer(ABC):
 	def to_model(self) -> SimulatorModel:
 		"""Exports the trained model as a runtime :class:`SimulatorModel`."""
 
-	def rollout(self, n_steps: int = None) -> Tuple[np.ndarray, np.ndarray, pd.DatetimeIndex]:
+	def rollout(self, n_steps: int = None, model: Optional[SimulatorModel] = None) -> Tuple[np.ndarray, np.ndarray, pd.DatetimeIndex]:
 		"""Autoregressive rollout on the test split using real action deltas.
 
 		Seeds from the last ``required_history`` real rows before the test
@@ -143,7 +143,8 @@ class BaseTrainer(ABC):
 			Tuple: ``(y_pred, y_true, dates)`` — each of shape ``(N, n_targets)``
 				plus a DatetimeIndex of length ``N``.
 		"""
-		model = self.to_model()
+		if model is None:
+			model = self.to_model()
 		history_len = model.required_history
 
 		transitions = build_transitions(self.deployment_names, self.df)
@@ -184,6 +185,91 @@ class BaseTrainer(ABC):
 		return (np.asarray(y_pred, dtype=np.float64),
 				np.asarray(y_true, dtype=np.float64),
 				pd.DatetimeIndex(pred_dates))
+
+	def rollout_episodes(self, horizon: int = 25, n_rollouts: int = 200,
+						 model: Optional[SimulatorModel] = None,
+						 seed: Optional[int] = None) -> dict:
+		"""Evaluates the model with many short autoregressive rollouts.
+
+		This mirrors how the learned strategy is actually used: the environment
+		reseeds the simulator from real data every ``max_steps`` steps, so the
+		model only ever runs ``horizon`` autoregressive steps before getting
+		fresh ground truth. Each rollout is seeded from a random real slice of
+		the test split, rolled out ``horizon`` steps (real pod deltas, predicted
+		targets fed back), and the per-step error is accumulated. The continuous
+		full-split :meth:`rollout` is an unrealistically harsh worst case by
+		comparison.
+
+		Args:
+			horizon: Autoregressive steps per rollout (match the env ``max_steps``).
+			n_rollouts: Number of random start points sampled from the test split.
+			model: Model to evaluate (defaults to ``self.to_model()``).
+			seed: RNG seed for the start points (defaults to ``self.seed``).
+
+		Returns:
+			dict: ``mae``/``rmse``/``nrmse`` arrays of shape ``(horizon, n_targets)``
+				(error at each rollout step per target), plus ``target_features``,
+				``target_scale`` (per-target std used for the NRMSE), ``horizon``
+				and the realised ``n_rollouts``.
+		"""
+		if model is None:
+			model = self.to_model()
+		history_len = model.required_history
+
+		transitions = build_transitions(self.deployment_names, self.df)
+		states  = transitions[self.state_features].to_numpy(dtype=np.float64)
+		deltas  = transitions[delta_columns(self.deployment_names)].to_numpy(dtype=np.float64)
+		targets = transitions[self.target_features].to_numpy(dtype=np.float64)
+		trans_dates = pd.to_datetime(transitions["date"])
+
+		test_start = pd.to_datetime(self.test_df["date"].min())
+		i_val = int((trans_dates >= test_start).idxmax())
+
+		target_in_state = [self.state_features.index(f) for f in self.target_features]
+		n_targets = len(self.target_features)
+
+		lo = max(i_val, history_len - 1)
+		hi = len(transitions) - horizon - 1
+		if hi <= lo:
+			raise ValueError(
+				f"Test split too short for horizon={horizon} "
+				f"(usable starts: {hi - lo}).")
+
+		rng = np.random.default_rng(self.seed if seed is None else seed)
+		n_rollouts = int(min(n_rollouts, hi - lo))
+		starts = rng.choice(np.arange(lo, hi), size=n_rollouts, replace=False)
+
+		abs_err = np.zeros((horizon, n_targets))
+		sq_err  = np.zeros((horizon, n_targets))
+		for s in starts:
+			history = [states[k].copy() for k in range(s - history_len + 1, s + 1)]
+			for h in range(horizon):
+				t = s + h
+				pred = model.predict_next(
+					np.array(history[-history_len:], dtype=np.float64), deltas[t])
+				true = targets[t + 1]
+				abs_err[h] += np.abs(pred - true)
+				sq_err[h]  += (pred - true) ** 2
+
+				next_state = states[t + 1].copy()
+				for pred_i, state_i in enumerate(target_in_state):
+					next_state[state_i] = pred[pred_i]
+				history.append(next_state)
+
+		abs_err /= n_rollouts
+		rmse = np.sqrt(sq_err / n_rollouts)
+		scale = targets.std(axis=0)
+		scale = np.where(scale > 0, scale, 1.0)
+
+		return {
+			"horizon": horizon,
+			"n_rollouts": n_rollouts,
+			"mae": abs_err,
+			"rmse": rmse,
+			"nrmse": rmse / scale,
+			"target_features": list(self.target_features),
+			"target_scale": scale,
+		}
 
 	def save(self, path: Path) -> None:
 		"""Exports and persists the trained model as an artifact directory.

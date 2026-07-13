@@ -4,13 +4,8 @@
 **/venv-gwydion/
 **/venv-gwydion-estimator/
 **__pycache__/
-*.zip
-*.pkl
 logs/
-**events.out.tfevents.*
 *.png
 *.log
-*.db
-*.json
 
 **/simulation/artifacts/

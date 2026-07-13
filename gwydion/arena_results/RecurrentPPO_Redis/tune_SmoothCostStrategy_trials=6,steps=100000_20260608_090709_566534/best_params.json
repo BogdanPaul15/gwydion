@@ -1,0 +1,21 @@
+{
+  "best_value": 48.8649999,
+  "best_params": {
+    "batch_size_pow": 4,
+    "n_steps_pow": 6,
+    "one_minus_gamma": 0.11325019675291695,
+    "one_minus_gae_lambda": 0.0009451217571971893,
+    "learning_rate": 0.0004656026383470199,
+    "lr_schedule": "constant",
+    "ent_coef": 1.4980194426765554e-08,
+    "clip_range": 0.2,
+    "n_epochs": 14,
+    "max_grad_norm": 0.5638538499472189,
+    "net_arch": "medium",
+    "activation_fn": "tanh",
+    "lstm_hidden_size": 64,
+    "n_lstm_layers": 2,
+    "enable_critic_lstm": true
+  },
+  "reward_strategy": "SmoothCostStrategy"
+}

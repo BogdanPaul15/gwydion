@@ -87,7 +87,8 @@ class Deployment(ABC):
 
         self.config = client.Configuration()
         self.config.verify_ssl = False
-        self.config.api_key = {"authorization": f"Bearer {self.token}"}
+        self.config.api_key = {"BearerToken": self.token}
+        self.config.api_key_prefix = {"BearerToken": "Bearer"}
         self.config.host = self.host
 
         self.client = client.ApiClient(self.config)

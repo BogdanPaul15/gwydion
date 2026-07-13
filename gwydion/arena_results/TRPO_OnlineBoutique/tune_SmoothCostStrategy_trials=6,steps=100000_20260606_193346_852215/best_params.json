@@ -1,0 +1,16 @@
+{
+  "best_value": 190.3885713,
+  "best_params": {
+    "n_steps_pow": 7,
+    "batch_size_pow": 5,
+    "one_minus_gamma": 0.199283570498879,
+    "one_minus_gae_lambda": 0.009845707581133465,
+    "learning_rate": 0.0004325883402984933,
+    "n_critic_updates": 10,
+    "cg_max_steps": 9,
+    "target_kl": 0.004824715847473364,
+    "net_arch": "small",
+    "activation_fn": "relu"
+  },
+  "reward_strategy": "SmoothCostStrategy"
+}

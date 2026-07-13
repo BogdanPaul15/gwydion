@@ -16,6 +16,7 @@ spec:
   selector:
     matchLabels:
       app: currencyservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -109,28 +110,24 @@ spec:
         env:
         - name: FRONTEND_ADDR
           value: "frontend:80"
-        - name: USERS
-          value: "10"
-        - name: USER_THROUGHPUT
-          value: "1"
-        - name: DETAIL_STAT_DIRECTORY
-          value: "/tmp/results/"
-        - name: CSV_STATS_INTERVAL_SEC
-          value: "10"
-        - name: PROMETHEUS_URL
-          value: "http://prom-kube-prometheus-stack-prometheus:9090"
-        - name: KUBERNETES_NAMESPACE
-          value: "onlineboutique"
       containers:
       - name: main
-        image: jpedro1992/online_boutique_flow_generator_slim:autoscaling
+        image: bogdanpaul15/gwydion-loadgenerator:latest
         ports:
         - containerPort: 8089
         env:
-        - name: FRONTEND_ADDR
-          value: "frontend:80"
-        - name: USERS
+        - name: LOCUST_AUTOSTART
+          value: "true"
+        - name: LOCUST_HOST
+          value: "http://frontend:80"
+        - name: LOAD_MIN_USERS
           value: "10"
+        - name: LOAD_MAX_USERS
+          value: "150"
+        - name: LOAD_STEP_SECONDS
+          value: "30"
+        - name: LOAD_SPAWN_RATE
+          value: "20"
         resources:
           requests:
             cpu: 300m
@@ -145,7 +142,7 @@ spec:
           name: metrics
         env:
         - name: LOCUST_EXPORTER_URI
-          value: "http://localhost:8089"   # talks to the main container
+          value: "http://localhost:8089"
         resources:
           requests:
             cpu: 50m
@@ -200,6 +197,7 @@ spec:
   selector:
     matchLabels:
       app: productcatalogservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -257,6 +255,7 @@ spec:
   selector:
     matchLabels:
       app: checkoutservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -323,6 +322,7 @@ spec:
   selector:
     matchLabels:
       app: shippingservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -380,6 +380,7 @@ spec:
   selector:
     matchLabels:
       app: cartservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -438,6 +439,7 @@ spec:
   selector:
     matchLabels:
       app: redis-cart
+  replicas: 1
   template:
     metadata:
       labels:
@@ -497,6 +499,7 @@ spec:
   selector:
     matchLabels:
       app: emailservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -556,6 +559,7 @@ spec:
   selector:
     matchLabels:
       app: paymentservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -613,6 +617,7 @@ spec:
   selector:
     matchLabels:
       app: frontend
+  replicas: 1
   template:
     metadata:
       labels:
@@ -726,6 +731,7 @@ spec:
   selector:
     matchLabels:
       app: recommendationservice
+  replicas: 1
   template:
     metadata:
       labels:
@@ -787,6 +793,7 @@ spec:
   selector:
     matchLabels:
       app: adservice
+  replicas: 1
   template:
     metadata:
       labels:

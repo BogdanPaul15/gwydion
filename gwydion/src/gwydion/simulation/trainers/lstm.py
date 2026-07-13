@@ -7,11 +7,11 @@ import pandas as pd
 import optuna
 import torch
 from torch import nn
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 
 from gwydion.simulation.models import LSTMSimulatorModel, TransitionLSTM
 from .base import BaseTrainer
-from .utils import make_windows
+from .utils import make_windows, build_transitions, delta_columns
 
 logger = logging.getLogger(__name__)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -32,19 +32,21 @@ class LSTMTrainer(BaseTrainer):
 
 	Sliding windows of recent states are encoded by an LSTM; the per-deployment
 	pod delta is concatenated to the final hidden state before a regression head
-	predicts the next-step target metrics. Inputs and outputs are standardized
-	with scalers fitted on the training split only.
+	predicts the next-step target metrics. Inputs and outputs are scaled with
+	robust (median/IQR) scalers fitted on the training split only, so the latency
+	values are not dominating.
 	"""
 
 	model_key = "lstm"
 
-	def __init__(self, config_path: str) -> None:
+	def __init__(self, config_path: str, seed: int = 42) -> None:
 		"""Loads data, builds windows and fits the input/output scalers.
 
 		Args:
 			config_path (str): Path to the trainer YAML config.
+			seed (int): Random seed for reproducibility. Defaults to 42.
 		"""
-		super().__init__(config_path)
+		super().__init__(config_path, seed=seed)
 
 		params = dict(DEFAULT_PARAMS)
 		params.update(self.model_params.get("defaults", {}))
@@ -62,11 +64,12 @@ class LSTMTrainer(BaseTrainer):
 		seq_va, act_va, y_va = make_windows(self.val_df, *args)
 		seq_te, act_te, y_te = make_windows(self.test_df, *args)
 
-		# Fit scalers on training windows only, then standardize every split.
+		# Fit robust (median/IQR) scalers on training windows only, then scale
+		# every split.
 		n_state = len(self.state_features)
-		state_scaler = StandardScaler().fit(seq_tr.reshape(-1, n_state))
-		action_scaler = StandardScaler().fit(act_tr)
-		target_scaler = StandardScaler().fit(y_tr)
+		state_scaler = RobustScaler().fit(seq_tr.reshape(-1, n_state))
+		action_scaler = RobustScaler().fit(act_tr)
+		target_scaler = RobustScaler().fit(y_tr)
 		self._scalers = {"state": state_scaler, "action": action_scaler, "target": target_scaler}
 
 		self._train = self._to_tensors(seq_tr, act_tr, y_tr)
@@ -96,20 +99,24 @@ class LSTMTrainer(BaseTrainer):
 			dropout=hp["dropout"],
 		).to(self.device)
 
-	def _fit_module(self, module: TransitionLSTM, hp: dict, epochs: int) -> float:
+	def _fit_module(self, module: TransitionLSTM, hp: dict, epochs: int,
+					train_data: Optional[tuple] = None) -> float:
 		"""Trains a module with early stopping on the validation loss.
 
 		Args:
 			module (TransitionLSTM): The network to train (modified in place).
 			hp (dict): Hyperparameters (``lr``, ``batch_size``, ``patience``).
 			epochs (int): Maximum number of epochs.
+			train_data (Optional[tuple]): ``(seq, act, y)`` tensors to train on.
+				Defaults to the teacher-forced training split ``self._train``;
+				scheduled-sampling rounds pass their own mixed dataset here.
 
 		Returns:
 			float: Best validation MSE reached (module restored to that state).
 		"""
 		opt = torch.optim.Adam(module.parameters(), lr=hp["lr"])
 		loss_fn = nn.MSELoss()
-		seq_tr, act_tr, y_tr = self._train
+		seq_tr, act_tr, y_tr = train_data if train_data is not None else self._train
 		seq_va, act_va, y_va = self._val
 		batch = hp["batch_size"]
 
@@ -160,6 +167,56 @@ class LSTMTrainer(BaseTrainer):
 		logger.info("LSTM tuning done | best val MSE: %.4f | params: %s",
 					study.best_value, self.best_params)
 
+	def _build_scheduled_windows(self, model: LSTMSimulatorModel,
+								 sampling_prob: float,
+								 rng: np.random.Generator) -> tuple:
+		"""Builds sliding windows with scheduled sampling for the LSTM.
+
+		Runs sequentially through the train+val data, maintaining a running state
+		history. At each step, with probability ``sampling_prob``, the target
+		columns of the next state are replaced by the model's own prediction,
+		so the windows contain a mix of real and predicted states. This exposes
+		the recurrent model to its own errors during training and reduces the
+		autoregressive distribution shift.
+
+		Args:
+			model: The current fitted :class:`LSTMSimulatorModel`.
+			sampling_prob: Probability of substituting a predicted next state.
+			rng: Seeded random generator.
+
+		Returns:
+			tuple: ``(seq, act, y)`` raw (unscaled) arrays ready for
+				:meth:`_to_tensors`.
+		"""
+		trainval_df = (pd.concat([self.train_df, self.val_df])
+					   .sort_values("date").reset_index(drop=True))
+		transitions = build_transitions(self.deployment_names, trainval_df)
+
+		states  = transitions[self.state_features].to_numpy(dtype=np.float64)
+		deltas  = transitions[delta_columns(self.deployment_names)].to_numpy(dtype=np.float64)
+		targets = transitions[self.target_features].to_numpy(dtype=np.float64)
+
+		window = self.window
+		target_idx = [self.state_features.index(f) for f in self.target_features]
+
+		history = [states[k].copy() for k in range(window)]
+		seqs, acts, ys = [], [], []
+		for t in range(window - 1, len(transitions) - 1):
+			seq = np.array(history[-window:], dtype=np.float64)
+			seqs.append(seq)
+			acts.append(deltas[t])
+			ys.append(targets[t + 1])
+
+			next_state = states[t + 1].copy()
+			if rng.random() < sampling_prob:
+				pred = model.predict_next(seq, deltas[t])
+				next_state[target_idx] = pred
+			history.append(next_state)
+
+		return (np.asarray(seqs, dtype=np.float64),
+				np.asarray(acts, dtype=np.float64),
+				np.asarray(ys, dtype=np.float64))
+
 	def train(self) -> None:
 		hp = dict(self._defaults)
 		if self.best_params:
@@ -172,6 +229,22 @@ class LSTMTrainer(BaseTrainer):
 		self._hyperparams = hp
 		logger.info("LSTM trained | window: %d | best val MSE: %.4f | params: %s",
 					self.window, best_val, hp)
+
+		ss_rounds = int(self.model_params.get("scheduled_sampling_rounds", 0))
+		ss_ratio  = float(self.model_params.get("scheduled_sampling_ratio", 0.5))
+		ss_epochs = int(self.model_params.get("scheduled_sampling_epochs", 10))
+
+		if ss_rounds > 0:
+			rng = np.random.default_rng(self.seed)
+			for r in range(ss_rounds):
+				ratio = ss_ratio * (r + 1) / ss_rounds
+				seq_ss, act_ss, y_ss = self._build_scheduled_windows(
+					self.to_model(), ratio, rng)
+				train_data = self._to_tensors(seq_ss, act_ss, y_ss)
+				val = self._fit_module(module, hp, ss_epochs, train_data=train_data)
+				logger.info("LSTM scheduled sampling round %d/%d | ratio=%.2f | "
+							"windows=%d | val MSE=%.4f",
+							r + 1, ss_rounds, ratio, len(seq_ss), val)
 
 	def test(self) -> dict:
 		if self._module is None:

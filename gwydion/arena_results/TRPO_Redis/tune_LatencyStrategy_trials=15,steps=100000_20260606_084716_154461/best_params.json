@@ -1,0 +1,16 @@
+{
+  "best_value": -0.9375,
+  "best_params": {
+    "n_steps_pow": 9,
+    "batch_size_pow": 8,
+    "one_minus_gamma": 0.02605312886372177,
+    "one_minus_gae_lambda": 0.00010963349810503127,
+    "learning_rate": 0.0004269501502887209,
+    "n_critic_updates": 20,
+    "cg_max_steps": 25,
+    "target_kl": 0.03195763878683251,
+    "net_arch": "medium",
+    "activation_fn": "tanh"
+  },
+  "reward_strategy": "LatencyStrategy"
+}

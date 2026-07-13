@@ -1,0 +1,21 @@
+{
+  "best_value": -8.9988,
+  "best_params": {
+    "batch_size_pow": 6,
+    "n_steps_pow": 6,
+    "one_minus_gamma": 0.023236535796625712,
+    "one_minus_gae_lambda": 0.00017055666611404563,
+    "learning_rate": 0.00013913599569857,
+    "lr_schedule": "constant",
+    "ent_coef": 9.54875365451325e-08,
+    "clip_range": 0.3,
+    "n_epochs": 10,
+    "max_grad_norm": 0.7550716947612868,
+    "net_arch": "small",
+    "activation_fn": "tanh",
+    "lstm_hidden_size": 64,
+    "n_lstm_layers": 1,
+    "enable_critic_lstm": true
+  },
+  "reward_strategy": "LatencyStrategy"
+}

@@ -1,0 +1,18 @@
+{
+  "best_value": 47.5,
+  "best_params": {
+    "batch_size_p": 5,
+    "n_steps_pow": 7,
+    "one_minus_gamma": 0.07959176808494628,
+    "one_minus_gae_lambda": 0.004395269184283466,
+    "learning_rate": 0.0003723508882722215,
+    "lr_schedule": "linear",
+    "ent_coef": 0.0012765197874232042,
+    "clip_range": 0.3,
+    "n_epochs": 12,
+    "max_grad_norm": 0.5767456179600408,
+    "net_arch": "small",
+    "activation_fn": "tanh"
+  },
+  "reward_strategy": "CostStrategy"
+}

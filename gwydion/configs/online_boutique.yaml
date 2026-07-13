@@ -1,10 +1,10 @@
 env:
   name: online_boutique_gym
   version: 0.0.1
-  k8s: False
-  host: "YOUR_K8S_CLUSTER_IP_HERE"
-  token: "YOUR_SERVICE_ACCOUNT_TOKEN_HERE"
-  prometheus_url: "YOUR_PROMETHEUS_URL_HERE"
+  k8s: True
+  host: "https://127.0.0.1:"
+  token: ""
+  prometheus_url: "http://localhost:9090"
   max_steps: 25
   waiting_period: 5
   target_id: 0
@@ -13,7 +13,7 @@ env:
   simulation_strategy:
     type: default
 
-  action_space_type: multi_discrete
+  action_space_type: discrete
   actions:
     - type: do_nothing
     - type: scale_up
